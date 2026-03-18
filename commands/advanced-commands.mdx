@@ -52,6 +52,90 @@ llm-checker smart-recommend --use-case coding --limit 5 --target-tps 30
 
 ---
 
+## Hardware Simulation
+
+### simulate
+
+Simulates hardware profiles to show compatible LLM models for a different system, without needing the actual hardware. Supports both preset profiles and fully custom hardware configurations.
+
+```bash
+# List all available preset profiles
+llm-checker simulate --list
+
+# Use a preset profile
+llm-checker simulate --profile rtx4090
+llm-checker simulate --profile m4pro24 --use-case coding
+
+# Custom hardware configuration
+llm-checker simulate --gpu "RTX 5060" --ram 32 --cpu "AMD Ryzen 7 5700X"
+llm-checker simulate --gpu "RTX 4090" --ram 64
+llm-checker simulate --ram 16
+```
+
+| Flag | Description |
+|------|-------------|
+| `-p, --profile <name>` | Preset hardware profile to simulate (e.g., `rtx4090`, `m4pro24`, `h100`) |
+| `-l, --list` | List all available hardware profiles |
+| `--gpu <model>` | Custom GPU model (e.g., `"RTX 5060"`, `"RX 7800 XT"`, `"Apple M4 Pro"`) |
+| `--ram <gb>` | Custom RAM in GB |
+| `--cpu <model>` | Custom CPU model |
+| `--vram <gb>` | Override GPU VRAM in GB (auto-detected from GPU model if omitted, requires `--gpu`) |
+| `-u, --use-case <case>` | Use case for scoring (default: `general`) |
+| `--optimize <profile>` | Optimization profile (default: `balanced`) |
+| `--limit <number>` | Number of models to show (default: `1`) |
+| `--no-verbose` | Disable progress output |
+
+<Tip>
+Run `llm-checker simulate --list` to see all built-in profiles including laptop, desktop, workstation, and data center tiers.
+</Tip>
+
+---
+
+## Catalog & Discovery
+
+### list-models
+
+Lists all models from the Ollama model database with filtering options. Does not require `sql.js` — uses the built-in curated catalog.
+
+```bash
+llm-checker list-models
+llm-checker list-models --category coding
+llm-checker list-models --popular
+llm-checker list-models --size small
+llm-checker list-models --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `-c, --category <category>` | Filter by category: `coding`, `talking`, `reading`, `reasoning`, `multimodal`, `creative`, `general` |
+| `-s, --size <size>` | Filter by size: `small`, `medium`, `large`, or specific (e.g., `"7b"`, `"13b"`) |
+| `-p, --popular` | Show only popular models (>100k pulls) |
+| `-r, --recent` | Show only recently updated models (last 30 days) |
+| `--limit <number>` | Limit number of results (default: `50`) |
+| `--full` | Show full details including variants and tags |
+| `--json` | Output as JSON |
+
+### ollama
+
+Manage Ollama integration and check its availability.
+
+```bash
+llm-checker ollama
+llm-checker ollama --list
+llm-checker ollama --running
+llm-checker ollama --compatible
+llm-checker ollama --recommendations
+```
+
+| Flag | Description |
+|------|-------------|
+| `-l, --list` | List installed models with compatibility scores |
+| `-r, --running` | Show running models with performance data |
+| `-c, --compatible` | Show only hardware-compatible installed models |
+| `--recommendations` | Show installation recommendations |
+
+---
+
 ## Hardware Tools
 
 ### gpu-plan

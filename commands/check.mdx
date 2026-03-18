@@ -103,8 +103,24 @@ QUICK START
   Override GPU VRAM in GB for simulation. Requires `--gpu`.
 </ParamField>
 
-<ParamField path="-j, --json" type="flag">
-  Output analysis results as JSON.
+<ParamField path="-d, --detailed" type="flag">
+  Show detailed hardware information in the output.
+</ParamField>
+
+<ParamField path="-f, --filter" type="string">
+  Filter results by model type.
+</ParamField>
+
+<ParamField path="--ollama-only" type="flag">
+  Only show models that are available in the Ollama registry.
+</ParamField>
+
+<ParamField path="--performance-test" type="flag">
+  Run active performance benchmarks against installed models. Produces real tok/s measurements instead of hardware-estimated speeds.
+</ParamField>
+
+<ParamField path="--show-ollama-analysis" type="flag">
+  Show a detailed breakdown of Ollama model analysis in the output.
 </ParamField>
 
 ## Use Case Examples
@@ -124,6 +140,15 @@ llm-checker check --policy ./policy.yaml
 
 # Suppress progress for CI
 llm-checker check --use-case coding --no-verbose
+
+# Detailed hardware information
+llm-checker check --detailed
+
+# Only show Ollama-available models
+llm-checker check --ollama-only
+
+# Run real performance benchmarks
+llm-checker check --performance-test
 
 # Simulate an RTX 4090 system
 llm-checker check --simulate rtx4090

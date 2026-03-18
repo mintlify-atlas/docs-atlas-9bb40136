@@ -71,14 +71,14 @@ reporting:
 
 ## Enforcement modes
 
-<Columns cols={2}>
+<CardGroup cols={2}>
   <Card title="audit" icon="eye">
     Policy violations are recorded and reported but the command exits with code `0`. Use audit mode to monitor compliance without blocking developer workflows.
   </Card>
   <Card title="enforce" icon="shield">
     Blocking violations cause the command to exit with a non-zero code. Use enforce mode in CI gates to prevent non-compliant models from being pulled or deployed.
   </Card>
-</Columns>
+</CardGroup>
 
 Set the mode at the top level of your policy file:
 
@@ -122,7 +122,8 @@ Validate a policy file against the v1 schema. Returns non-zero if the file has s
 
 ```bash
 llm-checker policy validate
-llm-checker policy validate --policy ./path/to/policy.yaml
+llm-checker policy validate --file ./path/to/policy.yaml
+llm-checker policy validate --json
 ```
 
 The validator checks:
@@ -149,7 +150,7 @@ llm-checker recommend --policy ./policy.yaml --category coding
 In `audit` mode, violations are printed and the command exits `0`. In `enforce` mode, any blocking violation causes a non-zero exit.
 
 <Note>
-  `--policy` takes precedence over `--calibrated` for routing resolution. See [Calibration Quick Start](/configuration/policy#calibrated-routing) for flag precedence details.
+  `--policy` takes precedence over `--calibrated` for routing resolution. See the [Calibration Guide](/guides/calibration) for flag precedence details.
 </Note>
 
 ---

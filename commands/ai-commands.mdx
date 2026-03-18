@@ -67,11 +67,11 @@ llm-checker ai-check
 # Evaluate top 5 coding models
 llm-checker ai-check --category coding --top 5
 
-# Compare specific models
-llm-checker ai-check --models codellama:7b deepseek-coder:6.7b
+# Use a specific evaluator model with a custom AI weight
+llm-checker ai-check --evaluator llama3.2:3b --category reasoning --weight 0.5
 
-# Use a specific evaluator model
-llm-checker ai-check --evaluator llama3.2:3b --category reasoning
+# Show top 12 reasoning models with 32k context preference
+llm-checker ai-check --category reasoning --top 12 --ctx 32768
 ```
 
 ---

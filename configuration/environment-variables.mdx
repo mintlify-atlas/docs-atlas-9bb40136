@@ -11,6 +11,7 @@ Environment variables let you adjust LLM Checker behavior for the current shell 
 |---|---|---|---|
 | `LLM_CHECKER_NO_GPU` | boolean | `false` | Disable GPU detection entirely |
 | `LLM_CHECKER_VRAM_GB` | number | auto-detected | Override detected VRAM in GB |
+| `LLM_CHECKER_RAM_GB` | number | auto-detected | Override detected system RAM in GB |
 | `OLLAMA_BASE_URL` | string | `http://localhost:11434` | Ollama API base URL |
 | `LLM_CHECKER_LOG_LEVEL` | string | `info` | Log verbosity level |
 | `LLM_CHECKER_CACHE_DIR` | string | `~/.llm-checker` | Directory for cache and benchmark data |
@@ -40,6 +41,14 @@ Environment variables let you adjust LLM Checker behavior for the current shell 
   <Note>
     Setting `LLM_CHECKER_NO_GPU=true` takes precedence — VRAM is ignored when GPU detection is disabled.
   </Note>
+</ParamField>
+
+<ParamField path="LLM_CHECKER_RAM_GB" type="number">
+  Forces LLM Checker to use the specified system RAM amount (in GB) instead of the auto-detected value. Useful when auto-detection returns incorrect values or for testing different memory budget scenarios.
+
+  ```bash
+  export LLM_CHECKER_RAM_GB=32
+  ```
 </ParamField>
 
 <ParamField path="OLLAMA_BASE_URL" type="string" default="http://localhost:11434">
@@ -105,7 +114,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install -g llm-checker
-      - run: llm-checker check --format json --quiet > hardware-analysis.json
+      - run: llm-checker check --no-verbose
 ```
 
 ### Shell script with inline overrides
@@ -114,7 +123,7 @@ You can scope overrides to a single command without exporting to the shell sessi
 
 ```bash
 # Override VRAM for this command only
-LLM_CHECKER_VRAM_GB=16 llm-checker check --quiet
+LLM_CHECKER_VRAM_GB=16 llm-checker check
 
 # Simulate CPU-only on a GPU machine
 LLM_CHECKER_NO_GPU=true llm-checker check --use-case coding
@@ -138,7 +147,7 @@ llm-checker check --detailed 2>&1 | tee debug.log
 ```bash
 for ram in 8 16 32 64; do
   echo "=== ${ram} GB RAM ==="
-  LLM_CHECKER_RAM_GB=$ram llm-checker check --quiet | grep "Compatible:"
+  LLM_CHECKER_RAM_GB=$ram llm-checker check --no-verbose
 done
 ```
 
