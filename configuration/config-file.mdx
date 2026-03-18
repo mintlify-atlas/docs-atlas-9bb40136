@@ -1,0 +1,107 @@
+---
+title: "Configuration File"
+description: "Customize LLM Checker defaults with a persistent JSON configuration file at ~/.llm-checker.json."
+---
+
+LLM Checker supports a JSON configuration file at `~/.llm-checker.json` that overrides built-in defaults for every invocation. No flags required — set your preferences once and they apply globally.
+
+## File location
+
+Create or edit the file at:
+
+```
+~/.llm-checker.json
+```
+
+The file is read on startup. If it is absent or contains invalid JSON, LLM Checker falls back to built-in defaults and logs a warning.
+
+## Example configuration
+
+The following example enables coding-optimized analysis with compact output and filters out models that are too large for typical developer machines:
+
+```json
+{
+  "analysis": {
+    "defaultUseCase": "code",
+    "performanceTesting": true
+  },
+  "display": {
+    "maxModelsPerTable": 15,
+    "compactMode": true
+  },
+  "filters": {
+    "minCompatibilityScore": 75,
+    "excludeModels": ["very-large-model"]
+  }
+}
+```
+
+## Full schema
+
+### `analysis`
+
+Controls how LLM Checker scores and benchmarks models.
+
+<ParamField path="analysis.defaultUseCase" type="string" default="general">
+  The use case applied when no `--use-case` flag is passed. Affects scoring weights across the Quality, Speed, Fit, and Context dimensions.
+
+  Accepted values: `general`, `coding`, `chat`, `reasoning`, `creative`, `fast`.
+</ParamField>
+
+<ParamField path="analysis.performanceTesting" type="boolean" default="false">
+  When `true`, LLM Checker runs an active benchmark against installed Ollama models instead of relying solely on hardware-estimated speed. Equivalent to passing `--performance-test` on every `check` call.
+
+  Enable this only if you want real tok/s measurements rather than theoretical estimates.
+</ParamField>
+
+### `display`
+
+Controls the appearance of the CLI output tables.
+
+<ParamField path="display.maxModelsPerTable" type="number" default="10">
+  Maximum number of model rows shown in compatibility and recommendation tables. Increase this if you want to see a longer ranked list without passing `--limit` each time.
+</ParamField>
+
+<ParamField path="display.compactMode" type="boolean" default="false">
+  When `true`, reduces table padding and omits secondary detail rows. Useful on narrow terminals or when piping output to a log file.
+</ParamField>
+
+### `filters`
+
+Pre-filters the model pool before scoring and ranking.
+
+<ParamField path="filters.minCompatibilityScore" type="number" default="0">
+  Minimum compatibility score (0–100) a model must achieve to appear in results. Models that fall below this threshold are silently dropped before the ranked list is printed.
+
+  Setting this to `75` hides marginal models and surfaces only well-matched candidates.
+</ParamField>
+
+<ParamField path="filters.excludeModels" type="string[]" default="[]">
+  An array of model name substrings to exclude from all results. Any model whose identifier contains one of these strings (case-insensitive) is dropped before scoring.
+
+  Example: `["very-large-model", "uncensored"]`
+</ParamField>
+
+## Minimal configuration
+
+You do not need to include every key. LLM Checker merges your file with built-in defaults — only the keys you specify are overridden:
+
+```json
+{
+  "display": {
+    "compactMode": true
+  }
+}
+```
+
+## Validation
+
+LLM Checker does not currently expose a `config validate` command. To verify your file parses correctly, run:
+
+```bash
+node -e "JSON.parse(require('fs').readFileSync(process.env.HOME + '/.llm-checker.json', 'utf8'))" && echo "Valid JSON"
+```
+
+<Tip>
+  On macOS and Linux, `~` resolves to `$HOME`. On Windows with WSL, use the WSL home directory (`/home/<user>/.llm-checker.json`) rather than the Windows user profile.
+</Tip>

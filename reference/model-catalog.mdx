@@ -1,0 +1,87 @@
+---
+title: "Model Catalog"
+description: "How LLM Checker sources, organizes, and scores the models it recommends."
+---
+
+LLM Checker maintains two catalog layers that are merged at runtime: a **dynamic catalog** scraped from the Ollama registry, and a **curated fallback catalog** used when the dynamic pool is unavailable.
+
+## Dynamic Catalog
+
+When the `sync` command has been run (requires `sql.js`), LLM Checker operates against the full scraped Ollama catalog — all families, sizes, and quantization variants. This pool typically covers 200+ models.
+
+```bash
+# Download the latest catalog
+npm install sql.js
+llm-checker sync
+```
+
+After sync, `search` and `smart-recommend` query this database directly with full scoring.
+
+## Curated Fallback Catalog
+
+When the dynamic scraped pool is unavailable, LLM Checker falls back to a built-in curated catalog of 35+ models from the most popular Ollama families. This catalog is stored at `src/models/catalog.json`.
+
+<Info>
+The curated fallback is used **only** when the dynamic scraped pool is unavailable. If you have run `llm-checker sync`, the full dynamic catalog is used instead.
+</Info>
+
+| Family | Models | Best For |
+|--------|--------|----------|
+| **Qwen 2.5/3** | 7B, 14B, Coder 7B/14B/32B, VL 3B/7B | Coding, general, vision |
+| **Llama 3.x** | 1B, 3B, 8B, Vision 11B | General, chat, multimodal |
+| **DeepSeek** | R1 8B/14B/32B, Coder V2 16B | Reasoning, coding |
+| **Phi-4** | 14B | Reasoning, math |
+| **Gemma 2** | 2B, 9B | General, efficient |
+| **Mistral** | 7B, Nemo 12B | Creative, chat |
+| **CodeLlama** | 7B, 13B | Coding |
+| **LLaVA** | 7B, 13B | Vision |
+| **Embeddings** | nomic-embed-text, mxbai-embed-large, bge-m3, all-minilm | RAG, search |
+
+## Locally Installed Models
+
+All available catalog models are automatically combined with locally installed Ollama models before scoring. Installed models receive priority consideration in recommendations.
+
+```bash
+# Rank only your installed models
+llm-checker installed
+```
+
+## Supported Quantization Types
+
+The following quantization formats are recognized and used for memory estimation and candidate filtering:
+
+| Format | Description |
+|--------|-------------|
+| `Q8_0` | 8-bit quantization — highest quality, ~1.05 bytes/param |
+| `Q4_K_M` | 4-bit K-quant medium — best balance, ~0.58 bytes/param |
+| `Q3_K` | 3-bit K-quant — smallest footprint, ~0.48 bytes/param |
+| `FP16` | 16-bit float — full precision, largest size |
+| `Q4_0`, `Q5_0`, `Q5_K_M` | Additional common quantization variants |
+
+The selector automatically picks the highest-quality quantization that fits your available memory budget.
+
+Filter by quantization when searching:
+
+```bash
+llm-checker search qwen --quant Q4_K_M --max-size 8
+```
+
+## Fine-Tuning Suitability Labels
+
+`check`, `recommend`, and `ai-check` output include a fine-tuning suitability label for each recommended model:
+
+| Label | Meaning |
+|-------|---------|
+| **Full FT** | Supports full fine-tuning (requires significant GPU memory) |
+| **LoRA** | Supports LoRA adapter training |
+| **QLoRA** | Supports quantized LoRA (most memory-efficient) |
+| **LoRA+QLoRA** | Supports both LoRA and QLoRA paths |
+| **Full+LoRA+QLoRA** | Supports all fine-tuning modes |
+
+```
+Coding:
+   qwen2.5-coder:14b (14B)
+   Score: 78/100
+   Fine-tuning: LoRA+QLoRA
+   Command: ollama pull qwen2.5-coder:14b
+```

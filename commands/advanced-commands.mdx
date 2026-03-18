@@ -1,0 +1,291 @@
+---
+title: "Advanced Commands"
+description: "Advanced tooling: sync, smart-recommend, gpu-plan, verify-context, amd-guard, toolcheck, mcp-setup, policy, and audit export."
+---
+
+## Commands Requiring sql.js
+
+<Warning>
+The following commands require the optional `sql.js` package for SQLite database access:
+
+```bash
+npm install sql.js
+```
+</Warning>
+
+### sync
+
+Downloads and stores the full Ollama model catalog into a local SQLite database. Run this before using `search` or `smart-recommend`.
+
+```bash
+llm-checker sync
+llm-checker sync --force          # Force full sync
+llm-checker sync --incremental    # Only sync new/updated models
+llm-checker sync --quiet          # Suppress progress output
+```
+
+| Flag | Description |
+|------|-------------|
+| `-f, --force` | Force full resync even if recent data exists |
+| `--incremental` | Only sync new and updated models |
+| `-q, --quiet` | Suppress all progress output |
+
+### smart-recommend
+
+Advanced recommendations using the full scoring engine and the local SQLite model database. Provides best, fastest, and highest-quality picks with score breakdowns.
+
+```bash
+llm-checker smart-recommend
+llm-checker smart-recommend --use-case reasoning
+llm-checker smart-recommend --use-case coding --limit 5 --target-tps 30
+```
+
+| Flag | Description |
+|------|-------------|
+| `-u, --use-case` | Optimize for: `general`, `coding`, `chat`, `reasoning`, `creative`, `fast` |
+| `-l, --limit` | Maximum number of recommendations (default: `5`) |
+| `--target-tps` | Target tokens per second (default: `20`) |
+| `--target-context` | Target context length (default: `8192`) |
+| `--include-vision` | Include multimodal models |
+| `--include-embeddings` | Include embedding models |
+| `-j, --json` | Output as JSON |
+
+---
+
+## Hardware Tools
+
+### gpu-plan
+
+Multi-GPU placement advisor. Computes single-GPU and pooled VRAM envelopes, strategy recommendation, and ready-to-paste environment variables.
+
+```bash
+llm-checker gpu-plan
+llm-checker gpu-plan --model-size 14    # Validate a 14GB model
+llm-checker gpu-plan --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--model-size` | Target model size in GB to validate against the plan |
+| `-j, --json` | Output plan as JSON |
+
+**Output includes:**
+- Detected GPU count and total VRAM/unified memory
+- Single-GPU safe model size envelope
+- Pooled (multi-GPU) safe model size envelope
+- Placement strategy with rationale
+- Recommended env vars (`CUDA_VISIBLE_DEVICES`, etc.)
+
+### verify-context
+
+Verifies the practical context window limit for a local Ollama model by combining the declared context from model metadata with a hardware memory budget estimate.
+
+```bash
+llm-checker verify-context
+llm-checker verify-context --model qwen2.5-coder:14b
+llm-checker verify-context --model llama3.2:3b --target 32768
+```
+
+| Flag | Description |
+|------|-------------|
+| `-m, --model` | Model to verify (default: first installed model) |
+| `-t, --target` | Target context tokens to validate against (default: `8192`) |
+| `-j, --json` | Output as JSON |
+
+**Output includes:**
+- Declared context window from model metadata
+- Estimated memory-safe context limit
+- Recommended runtime context value
+- Pass/warn/fail status with per-check breakdown
+
+### amd-guard
+
+AMD/Windows reliability guard with actionable mitigation hints. Checks ROCm availability, detects common driver issues, and provides a fix list.
+
+```bash
+llm-checker amd-guard
+llm-checker amd-guard --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `-j, --json` | Output report as JSON |
+
+**Output includes:**
+- Platform and primary backend detection
+- ROCm availability and detection method
+- Per-check status (pass/warn/fail)
+- Actionable recommendations for AMD/Windows setups
+
+### toolcheck
+
+Tool-calling compatibility tester. Sends a standardized `add_numbers` tool-calling prompt to local Ollama models and scores the response.
+
+```bash
+llm-checker toolcheck
+llm-checker toolcheck --model qwen2.5-coder:14b
+llm-checker toolcheck --all
+```
+
+| Flag | Description |
+|------|-------------|
+| `-m, --model` | Test a specific model by name |
+| `--all` | Test all installed models (default: tests first installed model) |
+| `--timeout` | Per-model timeout in ms (default: `45000`) |
+| `-j, --json` | Output as JSON |
+
+**Status levels:** `SUPPORTED`, `PARTIAL`, `UNSUPPORTED`
+
+---
+
+## MCP Setup
+
+### mcp-setup
+
+Prints or applies the Claude Code MCP configuration for LLM Checker.
+
+```bash
+llm-checker mcp-setup
+llm-checker mcp-setup --apply      # Run claude mcp add automatically
+llm-checker mcp-setup --npx        # Use npx instead of global binary
+llm-checker mcp-setup --json       # Output setup details as JSON
+```
+
+| Flag | Description |
+|------|-------------|
+| `--name` | MCP server name in Claude (default: `llm-checker`) |
+| `--npx` | Use `npx llm-checker-mcp` instead of global `llm-checker-mcp` |
+| `--apply` | Execute `claude mcp add ...` automatically |
+| `-j, --json` | Output setup details as JSON |
+
+---
+
+## Enterprise Policy Commands
+
+### policy init
+
+Generates a `policy.yaml` template for enterprise governance.
+
+```bash
+llm-checker policy init
+llm-checker policy init --file ./my-policy.yaml
+llm-checker policy init --file ./my-policy.yaml --force
+```
+
+| Flag | Description |
+|------|-------------|
+| `-f, --file` | Output path for the policy file (default: `policy.yaml`) |
+| `--force` | Overwrite an existing file |
+
+### policy validate
+
+Validates a policy file against the v1 schema. Exits non-zero on schema errors.
+
+```bash
+llm-checker policy validate
+llm-checker policy validate --file ./my-policy.yaml
+llm-checker policy validate --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `-f, --file` | Policy file to validate (default: `policy.yaml`) |
+| `-j, --json` | Output validation result as JSON |
+
+---
+
+## Audit Export
+
+### audit export
+
+Evaluates policy compliance against model candidates from `check` or `recommend`, then exports machine-readable reports in JSON, CSV, or SARIF format.
+
+```bash
+# Single format JSON report
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format json \
+  --out ./reports/check-policy.json
+
+# All configured formats
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format all \
+  --out-dir ./reports
+```
+
+| Flag | Description |
+|------|-------------|
+| `--policy` | **Required.** Policy file path |
+| `--command` | Evaluation source: `check` or `recommend` (default: `check`) |
+| `--format` | Report format: `json`, `csv`, `sarif`, or `all` (default: `json`) |
+| `--out` | Output file path (single-format only) |
+| `--out-dir` | Output directory when `--out` is omitted (default: `audit-reports`) |
+| `-u, --use-case` | Use case for `check` mode (default: `general`) |
+| `-c, --category` | Category hint for `recommend` mode |
+| `--optimize` | Optimization profile for recommend mode |
+| `--runtime` | Runtime for check mode |
+| `--include-cloud` | Include cloud models in check-mode analysis |
+| `--max-size` | Maximum model size filter |
+| `--min-size` | Minimum model size filter |
+| `-l, --limit` | Model analysis limit for check mode (default: `25`) |
+| `--no-verbose` | Disable verbose progress |
+
+### Integration Examples
+
+<CodeGroup>
+```bash CI artifact (JSON)
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format json \
+  --out ./reports/policy-report.json
+```
+
+```bash SIEM ingestion (CSV)
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format csv \
+  --out ./reports/policy-report.csv
+```
+
+```bash Security scanning (SARIF)
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format sarif \
+  --out ./reports/policy-report.sarif
+```
+</CodeGroup>
+
+### GitHub Actions Policy Gate
+
+```yaml
+name: Policy Gate
+on: [pull_request]
+
+jobs:
+  policy-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: node bin/enhanced_cli.js check --policy ./policy.yaml --runtime ollama --no-verbose
+      - if: always()
+        run: node bin/enhanced_cli.js audit export --policy ./policy.yaml --command check --format all --runtime ollama --no-verbose --out-dir ./policy-reports
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: policy-audit-reports
+          path: ./policy-reports
+```
+
+<Note>
+When `--format all` is used, the export honors the `reporting.formats` list in your `policy.yaml`. If that list is empty, it defaults to `json`, `csv`, and `sarif`.
+</Note>

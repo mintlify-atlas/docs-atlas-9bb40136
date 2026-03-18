@@ -1,0 +1,131 @@
+---
+title: "ollama-plan — Runtime Configuration"
+description: "Compute safe Ollama environment variables for your local models: NUM_CTX, NUM_PARALLEL, and MAX_LOADED_MODELS."
+---
+
+## Overview
+
+`ollama-plan` reads your installed Ollama models and hardware profile, then computes safe values for `OLLAMA_NUM_CTX`, `OLLAMA_NUM_PARALLEL`, and `OLLAMA_MAX_LOADED_MODELS`. It prevents out-of-memory crashes by planning memory usage before you start Ollama.
+
+```bash
+llm-checker ollama-plan
+```
+
+## Example Output
+
+```
+OLLAMA CAPACITY PLAN
+Hardware: Metal (metal)
+Memory budget: 20GB usable (reserve 2GB)
+
+Selected models:
+  - qwen2.5-coder:14b (14B, ~9.1GB base)
+  - llama3.2:3b (3B, ~2.0GB base)
+
+Recommended envelope:
+  Context: 8192 (requested 8192)
+  Parallel: 2 (requested 2)
+  Loaded models: 2 (requested 2)
+  Estimated memory: 15.2GB / 20GB (76%)
+  Risk: LOW (18/100)
+
+Notes:
+  - Running both models simultaneously fits within your memory budget
+
+Recommended env vars:
+  export OLLAMA_NUM_CTX=8192
+  export OLLAMA_NUM_PARALLEL=2
+  export OLLAMA_MAX_LOADED_MODELS=2
+
+Fallback profile:
+  OLLAMA_NUM_CTX=4096 OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=1
+```
+
+## Flags
+
+<ParamField path="--models" type="string[]">
+  Model tags or family names to include in the plan. Matches against installed Ollama models by exact name, prefix, family, or substring. If omitted, all local models are included.
+</ParamField>
+
+<ParamField path="--ctx" type="number">
+  Target context window in tokens.
+
+  Default: `8192`
+</ParamField>
+
+<ParamField path="--concurrency" type="number">
+  Target number of parallel requests to support.
+
+  Default: `2`
+</ParamField>
+
+<ParamField path="--objective" type="string">
+  Optimization objective. Accepted values: `latency`, `balanced`, `throughput`.
+
+  Default: `balanced`
+</ParamField>
+
+<ParamField path="--reserve-gb" type="number">
+  Memory to reserve for the OS and background processes (GB).
+
+  Default: `2`
+</ParamField>
+
+<ParamField path="--json" type="flag">
+  Output the full capacity plan as JSON.
+</ParamField>
+
+## Usage Examples
+
+```bash
+# Plan for all installed models
+llm-checker ollama-plan
+
+# Plan for specific models only
+llm-checker ollama-plan --models qwen2.5-coder:14b llama3.2:3b
+
+# Optimize for low latency with a larger context window
+llm-checker ollama-plan --objective latency --ctx 16384
+
+# Throughput-optimized plan with 4 concurrent requests
+llm-checker ollama-plan --objective throughput --concurrency 4
+
+# Reserve 4GB for other workloads
+llm-checker ollama-plan --reserve-gb 4
+
+# Machine-readable output
+llm-checker ollama-plan --json
+```
+
+## Plan Output Fields
+
+| Field | Description |
+|-------|-------------|
+| **Memory budget** | Usable RAM after subtracting the OS reserve |
+| **Context** | Recommended `OLLAMA_NUM_CTX` value |
+| **Parallel** | Recommended `OLLAMA_NUM_PARALLEL` value |
+| **Loaded models** | Recommended `OLLAMA_MAX_LOADED_MODELS` value |
+| **Estimated memory** | Projected memory usage and utilization percentage |
+| **Risk** | Risk level (`LOW`, `MEDIUM`, `HIGH`) and score (0–100) |
+| **Fallback profile** | Conservative fallback values for constrained environments |
+
+## Applying the Plan
+
+Copy the `export` lines into your shell profile or set them before starting Ollama:
+
+```bash
+export OLLAMA_NUM_CTX=8192
+export OLLAMA_NUM_PARALLEL=2
+export OLLAMA_MAX_LOADED_MODELS=2
+ollama serve
+```
+
+Or apply them inline for a single session:
+
+```bash
+OLLAMA_NUM_CTX=8192 OLLAMA_NUM_PARALLEL=2 OLLAMA_MAX_LOADED_MODELS=2 ollama serve
+```
+
+<Note>
+Ollama must be running and you must have at least one model installed before running `ollama-plan`. Install a model with `ollama pull llama3.2:3b` if needed.
+</Note>

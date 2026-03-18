@@ -1,0 +1,166 @@
+---
+title: "AI Commands"
+description: "AI-powered model evaluation and auto-execution: ai-check and ai-run."
+---
+
+LLM Checker provides two AI-powered commands that add a meta-evaluation layer on top of the deterministic scoring engine. Both require Ollama to be installed and running.
+
+## ai-check
+
+`ai-check` performs a multi-objective meta-evaluation of candidate models for a given category. It selects an evaluator model from your local Ollama instance and uses it to reason about which model is best for the specified task.
+
+```bash
+llm-checker ai-check
+llm-checker ai-check --category coding
+llm-checker ai-check --category reasoning --top 5
+```
+
+### Example Output
+
+```
+INTELLIGENT MODEL SELECTION
+│ Selected Model: qwen2.5-coder:14b
+│ Confidence: 94%
+│ Intelligence Score: 87/100
+│ Fine-tuning: LoRA+QLoRA
+│ AI Analysis: Excellent fit for your high hardware configuration...
+```
+
+### Flags
+
+<ParamField path="-c, --category" type="string">
+  Task category for evaluation. Accepted values: `coding`, `reasoning`, `multimodal`, `general`.
+
+  Default: `general`
+</ParamField>
+
+<ParamField path="-t, --top" type="number">
+  Number of top candidate models to pass into the meta-evaluation.
+
+  Default: `12`
+</ParamField>
+
+<ParamField path="--ctx" type="number">
+  Target context length in tokens. Used to bias selection towards models with suitable context windows.
+
+  Default: `8192`
+</ParamField>
+
+<ParamField path="-e, --evaluator" type="string">
+  Evaluator model identifier. Use `auto` to let LLM Checker pick the best available local model.
+
+  Default: `auto`
+</ParamField>
+
+<ParamField path="-w, --weight" type="number">
+  Weight (0.0–1.0) applied to the AI evaluation score when blending with the deterministic score.
+
+  Default: `0.3`
+</ParamField>
+
+### Usage Examples
+
+```bash
+# AI meta-evaluation for all categories
+llm-checker ai-check
+
+# Evaluate top 5 coding models
+llm-checker ai-check --category coding --top 5
+
+# Compare specific models
+llm-checker ai-check --models codellama:7b deepseek-coder:6.7b
+
+# Use a specific evaluator model
+llm-checker ai-check --evaluator llama3.2:3b --category reasoning
+```
+
+---
+
+## ai-run
+
+`ai-run` automatically selects the best available local model for a task and launches it via Ollama. If a prompt is supplied, it is passed directly to the model. With `--calibrated`, routing uses your calibration policy instead of the AI selector.
+
+```bash
+llm-checker ai-run
+llm-checker ai-run --category coding --prompt "Write a Python parser for JSON"
+llm-checker ai-run --calibrated --category coding --prompt "Refactor this function"
+```
+
+### Example Output
+
+```
+Selected qwen2.5-coder:14b (heuristic, 94% confidence)
+
+Launching qwen2.5-coder:14b...
+Tip: Type /bye to exit the chat when finished
+```
+
+With calibrated routing:
+
+```
+CALIBRATED ROUTING
+Command: ai-run
+Policy: ./artifacts/calibration-policy.yaml
+Source: ./artifacts/calibration-policy.yaml
+Task: coding
+Route primary: qwen2.5-coder:7b
+Route fallbacks: llama3.2:3b
+Selected model: qwen2.5-coder:7b
+```
+
+### Flags
+
+<ParamField path="-c, --category" type="string">
+  Task category hint. Used for model selection and calibrated routing task resolution. Accepted values: `coding`, `reasoning`, `multimodal`, `general`, `chat`, `creative`.
+</ParamField>
+
+<ParamField path="--prompt" type="string">
+  Prompt to pass directly to the selected model at launch. If omitted, an interactive Ollama session starts.
+</ParamField>
+
+<ParamField path="--calibrated" type="string">
+  Enable calibrated routing. Optionally provide a file path. If omitted, auto-discovers from `~/.llm-checker/calibration-policy.{yaml,yml,json}`.
+</ParamField>
+
+<ParamField path="--policy" type="string">
+  Explicit calibration policy file. Takes precedence over `--calibrated`.
+</ParamField>
+
+<ParamField path="-m, --models" type="string[]">
+  Explicit list of model identifiers to select from, instead of all installed Ollama models.
+</ParamField>
+
+### Usage Examples
+
+```bash
+# Auto-select and launch
+llm-checker ai-run
+
+# Category hint with inline prompt
+llm-checker ai-run --category coding --prompt "Write a binary search in Rust"
+
+# Calibrated routing with auto-discovery
+llm-checker ai-run --calibrated --category coding --prompt "Refactor this function"
+
+# Calibrated routing with explicit policy
+llm-checker ai-run --calibrated ./artifacts/calibration-policy.yaml --category coding --prompt "Refactor this function"
+
+# Explicit policy (highest precedence)
+llm-checker ai-run --policy ./calibration-policy.yaml --prompt "Summarize this report"
+
+# Restrict candidate pool
+llm-checker ai-run --models qwen2.5-coder:14b llama3.2:3b --category coding
+```
+
+### Routing Precedence
+
+| Source | Precedence |
+|--------|------------|
+| `--policy <file>` | Highest — explicit enterprise/calibration policy |
+| `--calibrated <file>` | Second — explicit calibration file |
+| `--calibrated` (no path) | Third — auto-discovery from `~/.llm-checker/` |
+| AI selector | Fallback — heuristic multi-objective selection |
+
+<Warning>
+Both `ai-check` and `ai-run` require Ollama to be installed and running. If Ollama is not found in PATH, these commands exit with a helpful installation guide.
+</Warning>

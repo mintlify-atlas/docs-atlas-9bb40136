@@ -1,0 +1,115 @@
+---
+title: "Scoring System"
+description: "How LLM Checker scores and ranks models across Quality, Speed, Fit, and Context dimensions."
+---
+
+LLM Checker evaluates every candidate model across four dimensions, combined into a single weighted score that is calibrated to your chosen use case. All scoring weights are centralized in `src/models/scoring-config.js`.
+
+## The Four Dimensions
+
+| Dimension | Code | Description |
+|-----------|:----:|-------------|
+| **Quality** | Q | Model family reputation + parameter count + quantization penalty |
+| **Speed** | S | Estimated tokens/sec based on hardware backend and model size |
+| **Fit** | F | Memory utilization efficiency — how well the model fits in available RAM |
+| **Context** | C | Context window capability vs. target context length |
+
+## Scoring Weights by Use Case
+
+Three scoring systems are available, each serving a different workflow.
+
+### Deterministic Selector
+
+Used by `check` and `recommend`. Weights are `[Q, S, F, C]` arrays.
+
+| Category | Quality | Speed | Fit | Context |
+|----------|:-------:|:-----:|:---:|:-------:|
+| `general` | 45% | 35% | 15% | 5% |
+| `coding` | 55% | 20% | 15% | 10% |
+| `reasoning` | 60% | 10% | 20% | 10% |
+| `multimodal` | 50% | 15% | 20% | 15% |
+| `summarization` | 40% | 35% | 15% | 10% |
+| `reading` | 40% | 35% | 15% | 10% |
+| `embeddings` | 30% | 50% | 20% | 0% |
+
+### Scoring Engine
+
+Used by `smart-recommend` and `search`. Weights are `{Q, S, F, C}` objects with additional presets for specialized use cases.
+
+| Use Case | Quality | Speed | Fit | Context |
+|----------|:-------:|:-----:|:---:|:-------:|
+| `general` | 40% | 35% | 15% | 10% |
+| `coding` | 55% | 20% | 15% | 10% |
+| `reasoning` | 60% | 15% | 10% | 15% |
+| `chat` | 40% | 40% | 15% | 5% |
+| `creative` | 50% | 25% | 15% | 10% |
+| `embeddings` | 30% | 50% | 15% | 5% |
+| `vision` | 50% | 25% | 15% | 10% |
+| `fast` | 25% | 55% | 15% | 5% |
+| `quality` | 65% | 10% | 15% | 10% |
+
+### Multi-Objective Selector
+
+Used by `src/models/multi-objective-selector.js` for hardware-aware selection. Adds a fifth dimension — `hardwareMatch` — to emphasize hardware fit more heavily.
+
+| Category | Quality | Speed | TTFB | Context | Hardware Match |
+|----------|:-------:|:-----:|:----:|:-------:|:--------------:|
+| `general` | 45% | 15% | 5% | 5% | 30% |
+| `coding` | 45% | 15% | 5% | 10% | 25% |
+| `reasoning` | 50% | 10% | 5% | 15% | 20% |
+| `multimodal` | 40% | 10% | 5% | 10% | 35% |
+| `longctx` | 30% | 10% | 5% | 35% | 20% |
+
+## Memory Estimation
+
+Memory requirements are calculated using calibrated bytes-per-parameter values, validated against real Ollama model sizes.
+
+| Quantization | Bytes/Param | 7B Model | 14B Model | 32B Model |
+|:------------:|:-----------:|:--------:|:---------:|:---------:|
+| Q8_0 | 1.05 | ~8 GB | ~16 GB | ~35 GB |
+| Q4_K_M | 0.58 | ~5 GB | ~9 GB | ~20 GB |
+| Q3_K | 0.48 | ~4 GB | ~8 GB | ~17 GB |
+
+The selector automatically picks the best quantization variant that fits your available memory budget.
+
+## Mixture-of-Experts (MoE) Support
+
+For MoE architectures, deterministic memory estimation supports explicit sparse metadata when present:
+
+| Field | Description |
+|-------|-------------|
+| `total_params_b` | Total parameter count in billions |
+| `active_params_b` | Active parameters per forward pass |
+| `expert_count` | Total number of experts |
+| `experts_active_per_token` | Experts activated per token |
+
+Normalized recommendation variants expose both snake_case and camelCase aliases — for example, `total_params_b` and `totalParamsB` — when available.
+
+### MoE Parameter Path Selection
+
+MoE parameter path selection is deterministic and follows this fallback order:
+
+1. `active_params_b` — assumption source: `moe_active_metadata`
+2. `total_params_b * (experts_active_per_token / expert_count)` — assumption source: `moe_derived_expert_ratio`
+3. `total_params_b` — assumption source: `moe_fallback_total_params`
+4. Model `paramsB` fallback — assumption source: `moe_fallback_model_params`
+
+<Note>
+Dense models continue to use the dense parameter path (`dense_params`) unchanged. When `active_params_b` (or a derived active-ratio path) is available, inference memory uses the sparse-active parameter estimate even if artifact size metadata is also present.
+</Note>
+
+## Runtime-Aware MoE Speed Estimation
+
+MoE speed estimates include runtime-specific overhead assumptions for routing, communication, and offload — rather than a single fixed MoE boost.
+
+- Canonical helper: `src/models/moe-assumptions.js`
+- Applied in both `src/models/deterministic-selector.js` and `src/models/scoring-engine.js`
+
+| Runtime | Routing Overhead | Communication Overhead | Offload Overhead | Max Effective Gain |
+|:--------|:----------------:|:----------------------:|:----------------:|:------------------:|
+| `ollama` | 18% | 13% | 8% | 2.35x |
+| `vllm` | 12% | 8% | 4% | 2.65x |
+| `mlx` | 16% | 10% | 5% | 2.45x |
+| `llama.cpp` | 20% | 14% | 9% | 2.30x |
+
+Recommendation outputs expose these assumptions through runtime metadata and MoE speed diagnostics.

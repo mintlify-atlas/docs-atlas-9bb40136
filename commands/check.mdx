@@ -1,0 +1,160 @@
+---
+title: "check — Full System Analysis"
+description: "Analyze your hardware and rank compatible LLM models with deterministic 4D scoring."
+---
+
+## Overview
+
+`check` runs a full hardware analysis and scores compatible models across four dimensions: Quality, Speed, Fit, and Context. It is the primary command for answering *"what can I run on this machine right now?"*
+
+```bash
+llm-checker check
+```
+
+## Example Output
+
+```
+SYSTEM SUMMARY
+──────────────────────────────────────────────────
+CPU: Apple M4 Pro (12 cores)
+Memory: 24GB RAM
+GPU: Apple M4 Pro
+Architecture: ARM64
+Hardware Tier: HIGH
+
+RECOMMENDED MODEL
+──────────────────────────────────────────────────
+Model: Qwen 2.5 Coder 14B
+Size: ~9GB (Q4_K_M)
+Compatibility Score: 82/100
+Fine-tuning: LoRA+QLoRA
+Reason: Highest compatibility score for your hardware
+Estimated Speed: 28 tokens/sec
+Runtime: Ollama
+Status: Available for installation
+
+Pull: ollama pull qwen2.5-coder:14b
+
+QUICK START
+──────────────────────────────────────────────────
+1. Install the recommended model:
+   ollama pull qwen2.5-coder:14b
+2. Start using it:
+   ollama run qwen2.5-coder:14b
+```
+
+## Flags
+
+<ParamField path="-u, --use-case" type="string">
+  Filter and weight recommendations by use case. Accepted values: `general`, `coding`, `chat`, `reasoning`, `multimodal`, `embeddings`, `creative`.
+
+  Default: `general`
+</ParamField>
+
+<ParamField path="--runtime" type="string">
+  Specify the inference runtime. Accepted values: `ollama`, `vllm`, `mlx`, `llama.cpp`.
+
+  Default: `ollama`
+</ParamField>
+
+<ParamField path="-l, --limit" type="number">
+  Number of compatible models to display in output.
+
+  Default: `1`
+</ParamField>
+
+<ParamField path="--policy" type="string">
+  Path to a `policy.yaml` file. Evaluates all candidate models against enterprise governance rules and reports violations.
+</ParamField>
+
+<ParamField path="--no-verbose" type="flag">
+  Disable the step-by-step progress display. Useful for scripting and CI environments.
+</ParamField>
+
+<ParamField path="--max-size" type="string">
+  Maximum model size to consider. Accepts `B` (parameters) or `GB` format, e.g. `30B` or `15GB`.
+</ParamField>
+
+<ParamField path="--min-size" type="string">
+  Minimum model size to consider. Accepts `B` or `GB` format, e.g. `7B` or `4GB`.
+</ParamField>
+
+<ParamField path="--include-cloud" type="flag">
+  Include cloud-hosted models in the analysis in addition to local Ollama models.
+</ParamField>
+
+<ParamField path="--simulate" type="string">
+  Simulate a hardware profile instead of detecting real hardware. Use `--simulate list` to see all available profiles.
+</ParamField>
+
+<ParamField path="--gpu" type="string">
+  Custom GPU model for hardware simulation, e.g. `"RTX 5060"` or `"RX 7800 XT"`.
+</ParamField>
+
+<ParamField path="--ram" type="number">
+  Custom RAM in GB for hardware simulation, e.g. `32`.
+</ParamField>
+
+<ParamField path="--cpu" type="string">
+  Custom CPU model for hardware simulation, e.g. `"AMD Ryzen 7 5700X"`.
+</ParamField>
+
+<ParamField path="--vram" type="number">
+  Override GPU VRAM in GB for simulation. Requires `--gpu`.
+</ParamField>
+
+<ParamField path="-j, --json" type="flag">
+  Output analysis results as JSON.
+</ParamField>
+
+## Use Case Examples
+
+```bash
+# General analysis
+llm-checker check
+
+# Find best coding model, show top 3
+llm-checker check --use-case coding --limit 3
+
+# Specify runtime and filter size
+llm-checker check --runtime vllm --max-size 24B
+
+# Use enterprise policy governance
+llm-checker check --policy ./policy.yaml
+
+# Suppress progress for CI
+llm-checker check --use-case coding --no-verbose
+
+# Simulate an RTX 4090 system
+llm-checker check --simulate rtx4090
+
+# Custom hardware simulation
+llm-checker check --gpu "RTX 5060" --ram 32 --cpu "AMD Ryzen 7 5700X"
+```
+
+## Scoring System
+
+`check` uses the deterministic 4D scoring engine. Weights are adjusted by use case:
+
+| Category | Quality | Speed | Fit | Context |
+|----------|:-------:|:-----:|:---:|:-------:|
+| `general` | 45% | 35% | 15% | 5% |
+| `coding` | 55% | 20% | 15% | 10% |
+| `reasoning` | 60% | 10% | 20% | 10% |
+| `multimodal` | 50% | 15% | 20% | 15% |
+
+## Policy Enforcement
+
+When `--policy <file>` is supplied, `check` evaluates **all** compatible and marginal candidates discovered during analysis — not just the models shown in the `--limit` output.
+
+- In **audit** mode, policy violations are reported but the command exits with `0`.
+- In **enforce** mode, blocking violations cause a non-zero exit (default `1`).
+- Override the exit code with `enforcement.exit_code` in `policy.yaml`.
+
+```bash
+llm-checker check --policy ./policy.yaml --use-case coding --runtime vllm
+```
+
+<Tip>
+Run `llm-checker check --simulate list` to see all built-in hardware profiles for testing without needing the real hardware.
+</Tip>

@@ -1,80 +1,167 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get running in 2 minutes."
 ---
 
-## Get started in three steps
+## Basic flow
 
-Get your documentation site running locally and make your first customization.
+<Steps>
 
-### Step 1: Set up your local environment
+<Step title="Install LLM Checker">
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+```bash
+npm install -g llm-checker
+```
 
-### Step 2: Deploy your changes
+</Step>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Step title="Detect your hardware">
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+Run [`hw-detect`](/commands/hw-detect) to inspect your CPU, GPU, available memory, and the best inference backend for your system.
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+```bash
+llm-checker hw-detect
+```
 
-### Step 3: Go live
+```
+Summary:
+  Apple M4 Pro (24GB Unified Memory)
+  Tier: MEDIUM HIGH
+  Max model size: 15GB
+  Best backend: metal
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+CPU:
+  Apple M4 Pro
+  Cores: 12 (12 physical)
+  SIMD: NEON
 
-## Next steps
+Metal:
+  GPU Cores: 16
+  Unified Memory: 24GB
+  Memory Bandwidth: 273GB/s
+```
 
-Now that you have your docs running, explore these key features:
+On hybrid or integrated-only systems, `hw-detect` also surfaces GPU topology explicitly:
 
-<CardGroup cols={2}>
+```
+Dedicated GPUs: NVIDIA GeForce RTX 4060
+Integrated GPUs: Intel Iris Xe Graphics
+Assist path: Integrated/shared-memory GPU detected, runtime remains CPU
+```
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+</Step>
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+<Step title="Get model recommendations">
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+Run [`recommend`](/commands/recommend) to see the top-ranked models for each category (coding, reasoning, multimodal, and more) based on your hardware profile.
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+```bash
+llm-checker recommend --category coding
+```
 
-</CardGroup>
+```
+INTELLIGENT RECOMMENDATIONS BY CATEGORY
+Hardware Tier: HIGH | Models Analyzed: 205
+
+Coding:
+   qwen2.5-coder:14b (14B)
+   Score: 78/100
+   Fine-tuning: LoRA+QLoRA
+   Command: ollama pull qwen2.5-coder:14b
+
+Reasoning:
+   deepseek-r1:14b (14B)
+   Score: 86/100
+   Fine-tuning: QLoRA
+   Command: ollama pull deepseek-r1:14b
+
+Multimodal:
+   llama3.2-vision:11b (11B)
+   Score: 83/100
+   Fine-tuning: LoRA+QLoRA
+   Command: ollama pull llama3.2-vision:11b
+```
+
+<Tip>
+Use the `--category` flag to focus on a specific use case: `coding`, `reasoning`, `multimodal`, or `general`. You can also steer ranking by optimization profile with `--optimize speed`, `--optimize quality`, `--optimize balanced`, or `--optimize context`.
+</Tip>
+
+</Step>
+
+<Step title="Pull a model and run it">
+
+Copy the `ollama pull` command from the recommendation output, then use `ai-run` to prompt it directly:
+
+```bash
+# Pull the recommended model
+ollama pull qwen2.5-coder:14b
+
+# Run a prompt with auto model selection
+llm-checker ai-run --category coding --prompt "Write a hello world in Python"
+```
+
+If you have already calibrated routing, pass the `--calibrated` flag to use your policy file:
+
+```bash
+llm-checker ai-run --calibrated --category coding --prompt "Refactor this function"
+```
+
+</Step>
+
+</Steps>
+
+---
+
+## Calibration quick start (10 minutes)
+
+Calibration generates routing policy artifacts from a prompt suite so that `recommend` and `ai-run` can make deterministic, measured decisions instead of relying solely on hardware heuristics.
+
+<Steps>
+
+<Step title="Copy the sample prompt suite">
+
+```bash
+cp ./docs/fixtures/calibration/sample-suite.jsonl ./sample-suite.jsonl
+```
+
+</Step>
+
+<Step title="Generate calibration artifacts">
+
+Run `calibrate` in dry-run mode to produce both a calibration contract and a routing policy without executing live model calls:
+
+```bash
+mkdir -p ./artifacts
+llm-checker calibrate \
+  --suite ./sample-suite.jsonl \
+  --models qwen2.5-coder:7b llama3.2:3b \
+  --runtime ollama \
+  --objective balanced \
+  --dry-run \
+  --output ./artifacts/calibration-result.json \
+  --policy-out ./artifacts/calibration-policy.yaml
+```
+
+This creates two files:
+
+- `./artifacts/calibration-result.json` — calibration contract
+- `./artifacts/calibration-policy.yaml` — routing policy for use with `recommend` and `ai-run`
+
+</Step>
+
+<Step title="Apply calibrated routing">
+
+Pass the generated policy file to `recommend` or `ai-run` with the `--calibrated` flag:
+
+```bash
+llm-checker recommend --calibrated ./artifacts/calibration-policy.yaml --category coding
+llm-checker ai-run --calibrated ./artifacts/calibration-policy.yaml --category coding --prompt "Refactor this function"
+```
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+**Flag precedence:** `--policy <file>` takes precedence over `--calibrated [file]`. If you omit the path from `--calibrated`, discovery defaults to `~/.llm-checker/calibration-policy.{yaml,yml,json}`.
 </Note>
+
+</Step>
+
+</Steps>

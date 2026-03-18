@@ -1,0 +1,163 @@
+---
+title: "Enterprise Policy Guide"
+description: "Control model allowlists, runtime restrictions, and governance workflows using policy files with audit and enforce modes."
+---
+
+Policy files give teams explicit control over which models are permitted, which runtimes are allowed, and how violations are surfaced — either as warnings or as blocking errors. All policy functionality is available through the `policy` subcommands and the `--policy` flag on `check` and `recommend`.
+
+## What Policy Files Control
+
+A policy file is a YAML document that governs:
+
+- **Model allowlists** — which models or model families are permitted or blocked
+- **Runtime restrictions** — which inference runtimes (`ollama`, `vllm`, `mlx`, `llama.cpp`) are approved
+- **Enforcement mode** — whether violations log a warning (`audit`) or fail the command (`enforce`)
+- **Exit code** — the non-zero exit code returned in `enforce` mode (configurable via `enforcement.exit_code`)
+- **Reporting formats** — which export formats (`json`, `csv`, `sarif`) are produced by `audit export`
+- **Provenance requirements** — minimum metadata fields that must be present on any candidate model
+
+## Enforcement Modes
+
+<CodeGroup>
+```yaml audit mode
+enforcement:
+  mode: audit
+  # exit_code is irrelevant in audit mode — command always exits 0
+```
+
+```yaml enforce mode
+enforcement:
+  mode: enforce
+  exit_code: 1  # override if your CI system expects a different code
+```
+</CodeGroup>
+
+| Mode | Behaviour | Exit code |
+|---|---|---|
+| `audit` | Violations are reported in output but the command exits `0` | Always `0` |
+| `enforce` | Blocking violations cause a non-zero exit | Default `1`, overridable via `exit_code` |
+
+<Warning>
+  In `enforce` mode, report artifacts are still written to disk before the process exits non-zero. This ensures compliance evidence is always available even when a pipeline job fails.
+</Warning>
+
+## Creating a Policy File
+
+<Steps>
+  <Step title="Generate a policy template">
+    `policy init` writes a fully commented `policy.yaml` template to your working directory:
+
+    ```bash
+    llm-checker policy init
+    ```
+
+    Open `policy.yaml` and edit the allowlists, restrictions, and enforcement settings to match your organization's requirements.
+  </Step>
+
+  <Step title="Validate the policy file">
+    `policy validate` checks the file against the v1 schema and returns a non-zero exit code if the file is invalid:
+
+    ```bash
+    llm-checker policy validate
+    ```
+
+    To validate a file at a specific path:
+
+    ```bash
+    llm-checker policy validate --policy ./path/to/policy.yaml
+    ```
+
+    A passing validation produces structured output listing each rule and its status. Fix any schema errors before using the file in `check` or `recommend`.
+  </Step>
+
+  <Step title="Apply the policy to check and recommend">
+    Pass `--policy <file>` to `check` or `recommend` to enable policy evaluation:
+
+    ```bash
+    llm-checker check --policy ./policy.yaml
+    llm-checker check --policy ./policy.yaml --use-case coding --runtime vllm
+    llm-checker recommend --policy ./policy.yaml --category coding
+    ```
+
+    Policy outcomes are embedded in the command output alongside the usual model rankings. In `enforce` mode, any blocking violation halts the command with a non-zero exit.
+  </Step>
+
+  <Step title="Export compliance reports">
+    `audit export` runs the policy evaluation and writes machine-readable reports:
+
+    ```bash
+    # Single format
+    llm-checker audit export \
+      --policy ./policy.yaml \
+      --command check \
+      --format json \
+      --out ./reports/check-policy.json
+
+    # All configured formats at once
+    llm-checker audit export \
+      --policy ./policy.yaml \
+      --command check \
+      --format all \
+      --out-dir ./reports
+    ```
+
+    `--command check|recommend` selects the candidate source. `--format all` honours `reporting.formats` in your policy file and falls back to `json,csv,sarif`.
+  </Step>
+</Steps>
+
+## Audit Export Formats
+
+<CodeGroup>
+```bash JSON (pipeline post-processing)
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format json \
+  --out ./reports/policy-report.json
+```
+
+```bash CSV (SIEM ingestion)
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format csv \
+  --out ./reports/policy-report.csv
+```
+
+```bash SARIF (security scanning tools)
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format sarif \
+  --out ./reports/policy-report.sarif
+```
+</CodeGroup>
+
+| Format | Best for |
+|---|---|
+| `json` | Post-processing in pipeline jobs, dashboards, custom tooling |
+| `csv` | SIEM ingestion — Splunk, ELK, DataDog pipelines |
+| `sarif` | Security and code-scanning tool integrations (GitHub Advanced Security, etc.) |
+
+## Provenance Fields in Reports
+
+All `check`, `recommend`, and `audit export` outputs include normalized model provenance fields. These fields are present even when the underlying model metadata does not supply them — missing values are represented as `"unknown"` rather than being omitted, keeping downstream parsers deterministic.
+
+| Field | Description |
+|---|---|
+| `source` | Where the model entry originated (dynamic catalog, local install, curated fallback) |
+| `registry` | The model registry the entry was sourced from (e.g. `ollama`) |
+| `version` | Model version or tag |
+| `license` | Canonicalized SPDX-style license identifier |
+| `digest` | Content digest / hash when available |
+
+### License Canonicalization
+
+License values are normalized before policy checks so that free-text license strings from model metadata match policy rules reliably:
+
+| Raw value | Canonical form |
+|---|---|
+| `MIT License` | `mit` |
+| `Apache 2.0` | `apache-2.0` |
+
+This means a policy allowlist entry of `apache-2.0` will match models tagged `Apache 2.0`, `Apache-2.0`, or similar variants.

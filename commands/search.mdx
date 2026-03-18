@@ -1,0 +1,133 @@
+---
+title: "search — Model Search"
+description: "Search the Ollama model catalog with filters and intelligent 4D scoring. Requires sql.js."
+---
+
+## Overview
+
+`search` queries a local SQLite copy of the Ollama model catalog with full-text search and hardware-aware scoring. Results are ranked using the same Quality/Speed/Fit/Context scoring engine as `smart-recommend`.
+
+<Warning>
+`search` requires the optional `sql.js` package. Install it before using this command:
+
+```bash
+npm install sql.js
+```
+
+If the database has not been synced yet, run [`llm-checker sync`](/commands/advanced-commands#sync) first.
+</Warning>
+
+## Usage
+
+```bash
+llm-checker search <query> [options]
+```
+
+## Examples
+
+```bash
+# Search for llama models, show 5 results
+llm-checker search llama -l 5
+
+# Search coding models filtered by use case
+llm-checker search coding --use-case coding
+
+# Filter by quantization and maximum size
+llm-checker search qwen --quant Q4_K_M --max-size 8
+
+# Filter by model family
+llm-checker search coder --family qwen
+
+# Search for small fast models
+llm-checker search "7b" --max-size 5 --use-case fast
+
+# JSON output for scripting
+llm-checker search llama --json
+```
+
+## Example Output
+
+```
+Search Results for: qwen
+Hardware: Apple M4 Pro (24GB Unified Memory)
+Max model size: 15GB
+
+[87] qwen2.5-coder:14b
+     14B params, 9.0GB, Q4_K_M, ~28 tok/s
+     Q:85 S:72 F:90 C:80
+     ollama pull qwen2.5-coder:14b
+
+[81] qwen2.5:7b
+     7B params, 4.7GB, Q4_K_M, ~42 tok/s
+     Q:76 S:85 F:95 C:72
+     ollama pull qwen2.5:7b
+
+Insights:
+  [OK] 12 models fit within your memory budget
+  [!]  2 models exceed your max safe size and were excluded
+```
+
+## Flags
+
+<ParamField path="-l, --limit" type="number">
+  Maximum number of results to display.
+
+  Default: `10`
+</ParamField>
+
+<ParamField path="-u, --use-case" type="string">
+  Score and rank results for a specific use case. Accepted values: `general`, `coding`, `chat`, `reasoning`, `creative`, `fast`.
+
+  Default: `general`
+</ParamField>
+
+<ParamField path="--max-size" type="number">
+  Maximum model size in GB. Models larger than this value are excluded.
+</ParamField>
+
+<ParamField path="--min-size" type="number">
+  Minimum model size in GB.
+</ParamField>
+
+<ParamField path="--quant" type="string">
+  Filter by quantization type, e.g. `Q4_K_M`, `Q5_K_M`, `Q8_0`, `FP16`.
+</ParamField>
+
+<ParamField path="--family" type="string">
+  Filter by model family, e.g. `llama`, `qwen`, `mistral`, `gemma`.
+</ParamField>
+
+<ParamField path="-j, --json" type="flag">
+  Output results as JSON.
+</ParamField>
+
+## Score Breakdown
+
+Each search result includes a score breakdown using the 4D scoring system:
+
+| Score Component | Meaning |
+|----------------|---------|
+| `Q` | Quality — model family reputation + parameter count |
+| `S` | Speed — estimated tokens/sec for your hardware |
+| `F` | Fit — how efficiently the model fits in available memory |
+| `C` | Context — context window capability vs. target context |
+
+The `final` score is a weighted combination based on the selected `--use-case`.
+
+## Scoring Weights (search engine)
+
+| Use Case | Quality | Speed | Fit | Context |
+|----------|:-------:|:-----:|:---:|:-------:|
+| `general` | 40% | 35% | 15% | 10% |
+| `coding` | 55% | 20% | 15% | 10% |
+| `reasoning` | 60% | 15% | 10% | 15% |
+| `chat` | 40% | 40% | 15% | 5% |
+| `fast` | 25% | 55% | 15% | 5% |
+
+<Tip>
+Sync the database regularly to get the latest models from the Ollama registry:
+
+```bash
+llm-checker sync
+```
+</Tip>

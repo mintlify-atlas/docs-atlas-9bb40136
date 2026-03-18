@@ -1,0 +1,94 @@
+---
+title: "installed — Rank Installed Models"
+description: "Rank your locally downloaded Ollama models by hardware compatibility and use case."
+---
+
+## Overview
+
+`installed` connects to your local Ollama instance, retrieves all downloaded models, and scores them by compatibility with your current hardware. It is useful for auditing which models you have and identifying low-value or oversized models to remove.
+
+```bash
+llm-checker installed
+```
+
+## Example Output
+
+```
+INSTALLED MODELS RANKING
+────────────────────────────────────────────────────────────────────────────────
+Sorted by: score | Hardware: 24GB RAM
+
+ #   Model                      Size     Score      Use Case    Command
+ ─   ─────────────────────────  ───────  ─────────  ──────────  ──────────────────
+ 🥇  qwen2.5-coder:14b          9.1GB    87/100     coding      ollama run qwen2.5-coder
+ 🥈  deepseek-r1:14b            9.0GB    83/100     reasoning   ollama run deepseek-r1
+ 🥉  llama3.2:3b                2.0GB    78/100     general     ollama run llama3.2
+ 4.  nomic-embed-text           274MB    74/100     embeddings  ollama run nomic-embed-text
+ 5.  llava:13b                  8.0GB    61/100     multimodal  ollama run llava
+
+Consider removing these low-ranking models to free up space:
+  ollama rm llava:13b  # Score: 61/100, Size: 8.0GB
+```
+
+## Flags
+
+<ParamField path="--sort" type="string">
+  Column to sort by. Accepted values: `score`, `size`, `name`.
+
+  Default: `score`
+</ParamField>
+
+<ParamField path="--json" type="flag">
+  Output the ranked model list as JSON. Each entry includes `name`, `size`, `fileSizeGB`, `quantization`, `useCase`, `score`, and `command`.
+</ParamField>
+
+## Usage Examples
+
+```bash
+# Rank by compatibility score (default)
+llm-checker installed
+
+# Sort by file size
+llm-checker installed --sort size
+
+# Alphabetical listing
+llm-checker installed --sort name
+
+# JSON output for scripting
+llm-checker installed --json
+```
+
+## How Scoring Works
+
+Each installed model receives a compatibility score (0–100) based on:
+
+1. **RAM fit ratio** — how well the model's file size fits within 80% of available system RAM
+2. **Hardware tier match** — whether the model size is optimal for your CPU/RAM tier
+3. **Deterministic selector match** — if the model appears in the main analysis, its score is averaged in
+
+Use case is inferred from the model name:
+
+| Name pattern | Inferred use case |
+|-------------|-------------------|
+| `code`, `coder`, `deepseek-coder` | `coding` |
+| `embed`, `nomic`, `bge` | `embeddings` |
+| `llava`, `vision`, `bakllava` | `multimodal` |
+| `r1`, `qwq`, `reasoning` | `reasoning` |
+| `chat`, `instruct` | `chat` |
+| `wizard`, `creative` | `creative` |
+
+## Requirements
+
+Ollama must be running and accessible. If Ollama is not detected, `installed` will exit with an error and a hint for starting it.
+
+```bash
+# Install a model first if none are present
+ollama pull llama3.2:3b
+
+# Then run installed
+llm-checker installed
+```
+
+<Note>
+Models with a score below 50/100 are listed separately as candidates for removal. Use `ollama rm <model>` to free disk space.
+</Note>

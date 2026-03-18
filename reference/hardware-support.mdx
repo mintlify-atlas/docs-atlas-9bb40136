@@ -1,0 +1,119 @@
+---
+title: "Supported Hardware"
+description: "All hardware platforms, GPU families, and CPU backends supported by LLM Checker."
+---
+
+LLM Checker supports a wide range of hardware through its cross-platform detection system (`src/hardware/unified-detector.js`). Detection is automatic — run `llm-checker hw-detect` to see your system's profile.
+
+## Hardware Tiers
+
+Every detected system is classified into a hardware tier that determines the model size envelope and safe memory budget:
+
+| Tier | Description |
+|------|-------------|
+| **LOW** | Limited memory (≤8 GB); suited for small 1–3B models |
+| **MEDIUM** | Moderate capacity (8–16 GB); handles 7B models comfortably |
+| **MEDIUM HIGH** | Good capacity (16–24 GB); can run 14B models |
+| **HIGH** | High capacity (24–48 GB); suited for 14–32B models |
+| **VERY HIGH** | Enthusiast / workstation (48–96 GB+); runs 70B+ models |
+
+## Supported Hardware Families
+
+<AccordionGroup>
+  <Accordion title="Apple Silicon">
+    All Apple Silicon chips use a unified memory architecture. GPU-accessible memory is derived from total system RAM.
+
+    | Generation | Variants |
+    |------------|----------|
+    | M1 | M1, M1 Pro, M1 Max, M1 Ultra |
+    | M2 | M2, M2 Pro, M2 Max, M2 Ultra |
+    | M3 | M3, M3 Pro, M3 Max |
+    | M4 | M4, M4 Pro, M4 Max |
+
+    **Backend:** Metal (via Ollama Metal acceleration)
+  </Accordion>
+
+  <Accordion title="NVIDIA CUDA">
+    NVIDIA GPUs are detected via CUDA libraries and `nvidia-smi`.
+
+    | Series | Models |
+    |--------|--------|
+    | RTX 50 Series | 5090, 5080, 5070 Ti, 5070 |
+    | RTX 40 Series | 4090, 4080, 4070 Ti, 4070, 4060 Ti, 4060 |
+    | RTX 30 Series | 3090 Ti, 3090, 3080 Ti, 3080, 3070 Ti, 3070, 3060 Ti, 3060 |
+    | Data Center | H100, A100, A10, L40, T4 |
+
+    **Backend:** CUDA
+
+    <Note>
+    Jetson / L4T systems (NVIDIA embedded) are supported. The detector probes `/etc/nv_tegra_release`, device-tree compatible IDs, and kernel/utility hints to avoid false CPU-only fallback.
+    </Note>
+  </Accordion>
+
+  <Accordion title="AMD ROCm">
+    AMD GPUs are detected via ROCm (`rocm-smi`). VRAM values are normalized from `B`, `KiB`, `MiB`, and `GiB` units.
+
+    | Series | Models |
+    |--------|--------|
+    | RX 7900 | 7900 XTX, 7900 XT, 7800 XT, 7700 XT |
+    | RX 6900 | 6900 XT, 6800 XT, 6800 |
+    | Instinct | MI300X, MI300A, MI250X, MI210 |
+
+    **Backend:** ROCm
+
+    <Warning>
+    On Windows, use `amd-guard` to check compatibility and get mitigation hints before running large models on AMD hardware.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Intel">
+    Intel discrete GPUs (Arc) and integrated graphics are supported.
+
+    | Family | Models |
+    |--------|--------|
+    | Arc Discrete | A770, A750, A580, A380 |
+    | Integrated | Iris Xe, UHD Graphics |
+
+    **Backend:** oneAPI / CPU fallback for integrated
+  </Accordion>
+
+  <Accordion title="CPU Backends">
+    When no compatible GPU is detected, or when the user selects CPU-only inference, the following SIMD backends are used:
+
+    | Backend | Supported CPUs |
+    |---------|----------------|
+    | AVX-512 + AMX | Intel Sapphire Rapids, Emerald Rapids |
+    | AVX-512 | Intel Ice Lake+, AMD Zen 4 |
+    | AVX2 | Most modern x86 CPUs |
+    | ARM NEON | Apple Silicon, AWS Graviton, Ampere Altra |
+
+    **Backend:** CPU (llama.cpp)
+  </Accordion>
+</AccordionGroup>
+
+## Hybrid Systems
+
+Systems with both a dedicated GPU and an integrated GPU are handled explicitly. The hardware detector (`src/hardware/unified-detector.js`) preserves both GPU inventories and exposes them separately in hardware summaries.
+
+```
+Dedicated GPUs: NVIDIA GeForce RTX 4060
+Integrated GPUs: Intel Iris Xe Graphics
+Assist path: Integrated/shared-memory GPU detected, runtime remains CPU
+```
+
+- **Hybrid systems**: Both dedicated and integrated GPU models remain visible in the hardware summary.
+- **Integrated-only systems**: GPU inventory is surfaced even when the selected runtime backend is CPU.
+- **Tiering and token-speed estimation**: Prefer canonical integrated-GPU signals over regex-only checks for accuracy.
+
+## Backend Selection Logic
+
+The backend is selected automatically based on detected hardware in this priority order:
+
+1. **Metal** — Apple Silicon detected
+2. **CUDA** — NVIDIA GPU with CUDA libraries present
+3. **ROCm** — AMD GPU with ROCm runtime present
+4. **CPU** — fallback for Intel integrated, unsupported GPUs, or explicit CPU-only environments
+
+<Tip>
+Run `llm-checker hw-detect` to see which backend was selected for your system, the detected memory tier, and the maximum safe model size.
+</Tip>

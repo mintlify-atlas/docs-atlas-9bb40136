@@ -1,0 +1,108 @@
+---
+title: "Installation"
+description: "Install LLM Checker globally, via npx, or on Android with Termux. Node.js 16+ required."
+---
+
+## Requirements
+
+- **Node.js** 16 or later (16, 18, 20, 22, and 24 are all supported)
+- **npm** 8 or later
+- [Ollama](https://ollama.ai) installed on your system to pull and run models
+
+## Install
+
+<CodeGroup>
+
+```bash npm (recommended)
+npm install -g llm-checker
+```
+
+```bash npx (no install)
+npx llm-checker hw-detect
+```
+
+```bash Termux / Android
+pkg update
+pkg install ollama
+npm install -g llm-checker
+```
+
+</CodeGroup>
+
+<Note>
+After installation completes, npm runs a postinstall script that prints:
+
+```
+LLM Checker installed. Run: llm-checker hw-detect
+```
+
+This is expected — it is just a reminder of the first command to run.
+</Note>
+
+## Verify the installation
+
+```bash
+llm-checker --version
+```
+
+You should see the current version number (e.g. `3.5.6`).
+
+## Optional: sql.js for database features
+
+Three commands — `sync`, `search`, and `smart-recommend` — require an optional SQLite dependency. The core tool works without it.
+
+```bash
+npm install sql.js
+```
+
+Once installed, these commands become available:
+
+| Command | Description |
+|---------|-------------|
+| `sync` | Download the latest model catalog from the Ollama registry |
+| `search <query>` | Search models with filters and intelligent scoring |
+| `smart-recommend` | Advanced recommendations using the full scoring engine |
+
+## GitHub Packages (legacy)
+
+<Warning>
+The GitHub Packages mirror (`@pavelevich/llm-checker`) may lag behind the npm release. Use the npm package for the latest version.
+</Warning>
+
+If you specifically need to install from GitHub Packages:
+
+<Steps>
+
+<Step title="Configure the registry and token">
+
+You need a GitHub Personal Access Token (PAT) with `read:packages` scope.
+
+```bash
+echo "@pavelevich:registry=https://npm.pkg.github.com" >> ~/.npmrc
+echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> ~/.npmrc
+```
+
+</Step>
+
+<Step title="Install the scoped package">
+
+```bash
+npm install -g @pavelevich/llm-checker@latest
+```
+
+</Step>
+
+<Step title="Switch back to npm if the version looks old">
+
+If the installed version is older than expected, migrate to the npm package:
+
+```bash
+npm uninstall -g @pavelevich/llm-checker
+npm install -g llm-checker@latest
+hash -r
+llm-checker --version
+```
+
+</Step>
+
+</Steps>

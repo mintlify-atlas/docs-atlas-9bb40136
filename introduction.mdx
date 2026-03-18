@@ -1,0 +1,82 @@
+---
+title: "LLM Checker"
+description: "Intelligent CLI that analyzes your hardware and recommends the optimal local LLM models — with full Ollama integration, 4D scoring, and enterprise policy support."
+---
+
+<img
+  src="https://raw.githubusercontent.com/Pavelevich/llm-checker/main/assets/llm-checker-logo.gif"
+  alt="LLM Checker"
+  style={{ borderRadius: '12px', width: '100%' }}
+/>
+
+## Why LLM Checker?
+
+Choosing the right LLM for your hardware is complex. With thousands of model variants, quantization levels, and hardware configurations, finding the optimal model requires deep understanding of memory bandwidth, VRAM limits, and performance characteristics.
+
+**LLM Checker solves this.** It analyzes your system, scores every compatible model across four dimensions, and delivers actionable recommendations in seconds — complete with ready-to-run `ollama pull` commands.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get running in 2 minutes — detect your hardware and get your first model recommendation
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install via npm globally or run directly with npx — no build step required
+  </Card>
+  <Card title="Command Reference" icon="terminal" href="/commands/hw-detect">
+    Every command, flag, and option documented with real examples
+  </Card>
+  <Card title="MCP Integration" icon="robot" href="/guides/mcp-integration">
+    Use LLM Checker inside Claude Code via the built-in MCP server
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="200+ Dynamic Models" icon="database">
+    Full scraped Ollama catalog with curated 35+ model fallback across all major families
+  </Card>
+  <Card title="4D Scoring Engine" icon="chart-bar">
+    Quality, Speed, Fit, Context — deterministic weights calibrated per use case
+  </Card>
+  <Card title="Multi-GPU Detection" icon="microchip">
+    Apple Silicon, NVIDIA CUDA, AMD ROCm, Intel Arc, and CPU backends
+  </Card>
+  <Card title="Zero Native Dependencies" icon="check">
+    Pure JavaScript — works on any Node.js 16+ system including Termux (Android)
+  </Card>
+  <Card title="MCP Server Built-in" icon="plug">
+    Claude Code and other MCP-compatible assistants can analyze your hardware directly
+  </Card>
+  <Card title="Enterprise Policy" icon="shield">
+    Governance rules, audit export to JSON/CSV/SARIF, CI/CD policy gates
+  </Card>
+  <Card title="Calibrated Routing" icon="sliders">
+    Generate routing policies from prompt suites and apply them to `recommend` and `ai-run`
+  </Card>
+  <Card title="Interactive CLI Panel" icon="window">
+    Animated banner, command picker, up/down navigation — or direct invocation for scripts
+  </Card>
+</CardGroup>
+
+## How It Works
+
+LLM Checker uses a deterministic pipeline so the same inputs always produce the same ranked output:
+
+1. **Hardware profiling** — Detect CPU, GPU, RAM, and effective backend (Metal, CUDA, ROCm, CPU)
+2. **Model pool assembly** — Merge the full Ollama catalog (or curated fallback) with your locally installed models
+3. **Candidate filtering** — Keep only models relevant to your requested use case or category
+4. **Fit selection** — Pick the best quantization that fits in your available memory budget
+5. **Deterministic scoring** — Score each candidate across Quality, Speed, Fit, and Context
+6. **Policy + ranking** — Apply optional governance checks, rank, and return `ollama pull` commands
+
+## Supported Platforms
+
+| Platform | Status |
+|----------|--------|
+| macOS (Apple Silicon M1–M4) | Full Metal support |
+| Linux (NVIDIA CUDA) | Full CUDA support |
+| Linux (AMD ROCm) | Full ROCm support |
+| Windows (NVIDIA / AMD) | CUDA / ROCm support |
+| Android (Termux) | CPU backend |
+| Any Node.js 16+ system | CPU fallback |

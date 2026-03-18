@@ -1,0 +1,191 @@
+---
+title: "calibrate — Generate Calibration Artifacts"
+description: "Generate calibration result and routing policy artifacts from a JSONL prompt suite."
+---
+
+## Overview
+
+`calibrate` runs a JSONL prompt suite against one or more models and produces two artifacts:
+
+- **`calibration-result.json`** — the calibration contract with benchmark data, model metadata, and scoring
+- **`calibration-policy.yaml`** — a routing policy for use with `--calibrated` in `recommend` and `ai-run`
+
+```bash
+llm-checker calibrate \
+  --suite ./sample-suite.jsonl \
+  --models qwen2.5-coder:7b llama3.2:3b \
+  --runtime ollama \
+  --objective balanced \
+  --dry-run \
+  --output ./artifacts/calibration-result.json \
+  --policy-out ./artifacts/calibration-policy.yaml
+```
+
+## Flags
+
+<ParamField path="--suite" type="string">
+  **Required.** Path to the JSONL prompt suite file. Each line is a JSON object describing a prompt and its task metadata.
+</ParamField>
+
+<ParamField path="--models" type="string[]">
+  **Required.** One or more model identifiers to calibrate. Repeat the flag or comma-separate values:
+  ```bash
+  --models qwen2.5-coder:7b llama3.2:3b
+  --models qwen2.5-coder:7b,llama3.2:3b
+  ```
+</ParamField>
+
+<ParamField path="--output" type="string">
+  **Required.** Output path for the calibration result. Accepts `.json`, `.yaml`, or `.yml`.
+</ParamField>
+
+<ParamField path="--runtime" type="string">
+  Inference runtime for execution. Accepted values: `ollama`, `vllm`, `mlx`, `llama.cpp`.
+
+  Default: `ollama`
+</ParamField>
+
+<ParamField path="--mode" type="string">
+  Execution mode. Accepted values:
+  - `dry-run` — produce draft artifacts without any benchmark execution
+  - `contract-only` — build calibration contract without running prompts (default)
+  - `full` — run all prompts against each model (requires `--runtime ollama`)
+
+  Default: `contract-only`
+</ParamField>
+
+<ParamField path="--objective" type="string">
+  Calibration objective. Accepted values: `balanced`, `speed`, `quality`, `coding`, `reasoning`.
+
+  Default: `balanced`
+</ParamField>
+
+<ParamField path="--dry-run" type="flag">
+  Shorthand for `--mode dry-run`. Produces draft artifacts without running any prompts.
+</ParamField>
+
+<ParamField path="--policy-out" type="string">
+  Optional output path for the routing policy artifact. Accepts `.json`, `.yaml`, or `.yml`. Required to use calibrated routing in `recommend` and `ai-run`.
+</ParamField>
+
+<ParamField path="--warmup" type="number">
+  Number of warmup runs per prompt in `full` mode.
+
+  Default: `1`
+</ParamField>
+
+<ParamField path="--iterations" type="number">
+  Number of measured iterations per prompt in `full` mode.
+
+  Default: `2`
+</ParamField>
+
+<ParamField path="--timeout-ms" type="number">
+  Per-prompt timeout in milliseconds for `full` mode.
+
+  Default: `120000`
+</ParamField>
+
+## Calibration Quick Start
+
+<Steps>
+  <Step title="Copy the sample prompt suite">
+    ```bash
+    cp ./docs/fixtures/calibration/sample-suite.jsonl ./sample-suite.jsonl
+    ```
+  </Step>
+
+  <Step title="Generate calibration artifacts (dry run)">
+    ```bash
+    mkdir -p ./artifacts
+    llm-checker calibrate \
+      --suite ./sample-suite.jsonl \
+      --models qwen2.5-coder:7b llama3.2:3b \
+      --runtime ollama \
+      --objective balanced \
+      --dry-run \
+      --output ./artifacts/calibration-result.json \
+      --policy-out ./artifacts/calibration-policy.yaml
+    ```
+  </Step>
+
+  <Step title="Apply calibrated routing">
+    ```bash
+    llm-checker recommend \
+      --calibrated ./artifacts/calibration-policy.yaml \
+      --category coding
+
+    llm-checker ai-run \
+      --calibrated ./artifacts/calibration-policy.yaml \
+      --category coding \
+      --prompt "Refactor this function"
+    ```
+  </Step>
+</Steps>
+
+## Example Output
+
+```
+CALIBRATION ARTIFACTS GENERATED
+────────────────────────────────────────────────────────────────────────────────
+Suite: ./sample-suite.jsonl
+Runtime: ollama | Objective: balanced
+Models: 2
+Execution mode: dry-run
+Result: ./artifacts/calibration-result.json
+Policy: ./artifacts/calibration-policy.yaml
+```
+
+## Artifacts
+
+### calibration-result.json
+
+The calibration contract includes:
+- Model identifiers and runtime metadata
+- Suite metadata (prompt count, task distribution)
+- Per-model scoring and benchmark results (in `full` mode)
+- Objective and execution mode used
+
+### calibration-policy.yaml
+
+The routing policy maps task categories to model selections. Example structure (see `docs/fixtures/calibration/sample-generated-policy.yaml` for the full schema):
+
+```yaml
+version: 1
+calibration_result: ./artifacts/calibration-result.json
+routes:
+  coding:
+    primary: qwen2.5-coder:7b
+    fallbacks:
+      - llama3.2:3b
+  general:
+    primary: llama3.2:3b
+    fallbacks: []
+```
+
+## Policy Resolution Notes
+
+- `--policy <file>` always takes precedence over `--calibrated [file]` in `recommend` and `ai-run`.
+- When `--calibrated` has no path, auto-discovery checks `~/.llm-checker/calibration-policy.{yaml,yml,json}`.
+- `--mode full` currently requires `--runtime ollama`.
+
+<CodeGroup>
+```bash Full mode with 3 iterations
+llm-checker calibrate \
+  --suite ./prompts.jsonl \
+  --models qwen2.5-coder:7b \
+  --mode full \
+  --iterations 3 \
+  --output ./calibration.json \
+  --policy-out ./routing.yaml
+```
+
+```bash Comma-separated models
+llm-checker calibrate \
+  --suite ./prompts.jsonl \
+  --models qwen2.5-coder:7b,llama3.2:3b \
+  --output ./calibration.yaml \
+  --policy-out ./routing.yaml \
+  --dry-run
+```
+</CodeGroup>

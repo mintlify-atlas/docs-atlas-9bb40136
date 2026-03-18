@@ -1,0 +1,382 @@
+---
+title: "Enterprise Policy"
+description: "Enforce governance rules over which LLM models and runtimes are approved in your organization using policy.yaml."
+---
+
+LLM Checker's policy system lets platform and security teams define rules about which models are allowed, what runtimes are approved, what licenses are acceptable, and how violations are handled. Policy rules run inside `check` and `recommend` and produce machine-readable compliance reports for CI/CD pipelines and SIEM tools.
+
+## What a policy controls
+
+- **Model allow/deny lists** — wildcard patterns for approved or blocked model identifiers
+- **Size and parameter limits** — hard caps on model disk size or parameter count
+- **Quantization allowlists** — restrict to specific quantization formats (e.g., Q4\_K\_M only)
+- **Runtime requirements** — require specific backends (CUDA, Metal) or local-only execution
+- **License compliance** — allowlist approved open-source licenses
+- **Enforcement mode** — `audit` (report-only) or `enforce` (block on violation)
+- **Exceptions** — time-limited per-model overrides with approver attribution
+- **Audit export** — JSON, CSV, and SARIF reports for downstream tooling
+
+---
+
+## Policy file structure
+
+A policy is a YAML file, typically named `policy.yaml`. Generate a fully annotated template with:
+
+```bash
+llm-checker policy init
+```
+
+The generated template:
+
+```yaml
+version: 1
+org: your-org
+mode: enforce # audit | enforce
+
+rules:
+  models:
+    allow:
+      - "qwen2.5-coder:*"
+      - "llama3.1:*"
+    deny:
+      - "*uncensored*"
+    max_size_gb: 24
+    max_params_b: 32
+    allowed_quantizations: ["Q4_K_M", "Q5_K_M", "Q8_0"]
+
+  runtime:
+    required_backends: ["metal", "cuda"]
+    min_ram_gb: 32
+    local_only: true
+
+  compliance:
+    approved_licenses: ["mit", "apache-2.0", "llama"]
+
+enforcement:
+  on_violation: error # warn | error
+  exit_code: 3
+  allow_exceptions: true
+
+exceptions:
+  - model: "deepseek-r1:32b"
+    reason: "Approved PoC"
+    approver: "security@example.com"
+    expires_at: "2026-06-30"
+
+reporting:
+  formats: ["json", "csv", "sarif"]
+```
+
+---
+
+## Enforcement modes
+
+<Columns cols={2}>
+  <Card title="audit" icon="eye">
+    Policy violations are recorded and reported but the command exits with code `0`. Use audit mode to monitor compliance without blocking developer workflows.
+  </Card>
+  <Card title="enforce" icon="shield">
+    Blocking violations cause the command to exit with a non-zero code. Use enforce mode in CI gates to prevent non-compliant models from being pulled or deployed.
+  </Card>
+</Columns>
+
+Set the mode at the top level of your policy file:
+
+```yaml
+mode: enforce  # or: audit
+```
+
+### Exit code override
+
+By default, a blocked violation exits with code `1`. Override this with `enforcement.exit_code` to integrate with shell pipelines or CI systems that check specific exit codes:
+
+```yaml
+enforcement:
+  on_violation: error
+  exit_code: 3
+```
+
+Valid range: `1`–`255`.
+
+---
+
+## Policy commands
+
+### `policy init`
+
+Generate a starter `policy.yaml` in the current directory:
+
+```bash
+llm-checker policy init
+```
+
+To overwrite an existing file:
+
+```bash
+llm-checker policy init --force
+```
+
+### `policy validate`
+
+Validate a policy file against the v1 schema. Returns non-zero if the file has schema errors:
+
+```bash
+llm-checker policy validate
+llm-checker policy validate --policy ./path/to/policy.yaml
+```
+
+The validator checks:
+- `version` is an integer ≥ 1
+- `org` is a non-empty string
+- `mode` is `audit` or `enforce`
+- `rules` is a well-formed object
+- `enforcement.exit_code` is between 1 and 255
+- `reporting.formats` contains only `json`, `csv`, or `sarif`
+- All array fields contain non-empty strings
+
+---
+
+## Using `--policy` with `check` and `recommend`
+
+Both `check` and `recommend` accept a `--policy` flag that applies the policy rules to the candidate model set:
+
+```bash
+llm-checker check --policy ./policy.yaml
+llm-checker check --policy ./policy.yaml --use-case coding --runtime vllm
+llm-checker recommend --policy ./policy.yaml --category coding
+```
+
+In `audit` mode, violations are printed and the command exits `0`. In `enforce` mode, any blocking violation causes a non-zero exit.
+
+<Note>
+  `--policy` takes precedence over `--calibrated` for routing resolution. See [Calibration Quick Start](/configuration/policy#calibrated-routing) for flag precedence details.
+</Note>
+
+---
+
+## Rules reference
+
+### `rules.models`
+
+<ParamField path="rules.models.allow" type="string[]">
+  Wildcard patterns for allowed model identifiers. Supports `*` as a wildcard. If this list is non-empty, any model that does not match at least one pattern fails with `MODEL_NOT_ALLOWED`.
+
+  Example: `["qwen2.5-coder:*", "llama3.1:*"]`
+</ParamField>
+
+<ParamField path="rules.models.deny" type="string[]">
+  Wildcard patterns for explicitly blocked model identifiers. A model matching any deny pattern fails with `MODEL_DENIED` regardless of the allow list.
+
+  Example: `["*uncensored*"]`
+</ParamField>
+
+<ParamField path="rules.models.max_size_gb" type="number">
+  Maximum disk size in GB. Models exceeding this limit fail with `MODEL_TOO_LARGE`.
+</ParamField>
+
+<ParamField path="rules.models.max_params_b" type="number">
+  Maximum parameter count in billions. Models exceeding this limit fail with `MODEL_TOO_MANY_PARAMS`.
+</ParamField>
+
+<ParamField path="rules.models.allowed_quantizations" type="string[]">
+  Allowlist of quantization formats. Models with a quantization not in this list fail with `QUANTIZATION_NOT_ALLOWED`.
+
+  Example: `["Q4_K_M", "Q5_K_M", "Q8_0"]`
+</ParamField>
+
+### `rules.runtime`
+
+<ParamField path="rules.runtime.required_backends" type="string[]">
+  List of required runtime backends. The system backend must match one of these values or the model fails with `BACKEND_NOT_ALLOWED`.
+
+  Example: `["metal", "cuda"]`
+</ParamField>
+
+<ParamField path="rules.runtime.min_ram_gb" type="number">
+  Minimum required system RAM in GB. Fails with `INSUFFICIENT_RAM` if available memory is below this threshold.
+</ParamField>
+
+<ParamField path="rules.runtime.local_only" type="boolean" default="false">
+  When `true`, models from non-local sources (cloud, remote, hosted) fail with `MODEL_NOT_LOCAL`.
+</ParamField>
+
+### `rules.compliance`
+
+<ParamField path="rules.compliance.approved_licenses" type="string[]">
+  Allowlist of approved license identifiers. License values are canonicalized before comparison (for example `MIT License` → `mit`, `Apache 2.0` → `apache-2.0`). Models without an approved license fail with `LICENSE_NOT_APPROVED`.
+
+  Example: `["mit", "apache-2.0", "llama"]`
+</ParamField>
+
+### `enforcement`
+
+<ParamField path="enforcement.on_violation" type="string" default="error">
+  Behavior when a violation is detected in `enforce` mode. `error` blocks and exits non-zero. `warn` prints the violation but exits `0`.
+</ParamField>
+
+<ParamField path="enforcement.exit_code" type="number" default="1">
+  Exit code returned when a blocking violation occurs. Must be an integer between `1` and `255`.
+</ParamField>
+
+<ParamField path="enforcement.allow_exceptions" type="boolean" default="false">
+  When `true`, entries in the `exceptions` list can suppress violations for specific models. Suppressed violations are recorded in audit reports with `status: suppressed`.
+</ParamField>
+
+### `exceptions`
+
+Each entry in the `exceptions` array grants a time-limited override for a specific model:
+
+```yaml
+exceptions:
+  - model: "deepseek-r1:32b"
+    reason: "Approved PoC"
+    approver: "security@example.com"
+    expires_at: "2026-06-30"
+```
+
+<ParamField path="exceptions[].model" type="string">
+  Model identifier or wildcard pattern to match. Required.
+</ParamField>
+
+<ParamField path="exceptions[].reason" type="string">
+  Human-readable justification for the exception. Appears in audit reports.
+</ParamField>
+
+<ParamField path="exceptions[].approver" type="string">
+  Name or email of the person who approved the exception.
+</ParamField>
+
+<ParamField path="exceptions[].expires_at" type="string">
+  ISO 8601 date or datetime string. The exception is automatically inactive after this timestamp.
+</ParamField>
+
+### `reporting`
+
+<ParamField path="reporting.formats" type="string[]">
+  Default export formats used when `audit export --format all` is run. Valid values: `json`, `csv`, `sarif`. If omitted, all three formats are exported.
+</ParamField>
+
+---
+
+## Audit export
+
+The `audit export` command evaluates policy outcomes and writes compliance reports without modifying exit behavior:
+
+```bash
+# Single format
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format json \
+  --out ./reports/check-policy.json
+
+# All formats at once (honors reporting.formats from policy)
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format all \
+  --out-dir ./reports
+```
+
+`--command check|recommend` selects the candidate source. In `enforce` mode with blocking violations, reports are written before non-zero exit.
+
+### Export formats
+
+<AccordionGroup>
+  <Accordion title="JSON">
+    Structured compliance report with full model provenance, violation details, hardware summary, and enforcement metadata. Suitable for pipeline post-processing and dashboards.
+
+    ```bash
+    llm-checker audit export --policy ./policy.yaml --command check --format json --out ./reports/policy-report.json
+    ```
+
+    Each finding includes:
+    - `model_identifier`, `model_name`, `source`, `registry`, `version`, `license`, `digest`
+    - `violation_code`, `rule_path`, `rule_id`, `severity`, `message`
+    - `expected` vs `actual` values
+    - `recommendation` for remediation
+    - `status`: `active` or `suppressed` (by exception)
+  </Accordion>
+  <Accordion title="CSV">
+    Flat tabular format for SIEM ingestion (Splunk, ELK, DataDog). One row per violation finding, with the same fields as JSON.
+
+    ```bash
+    llm-checker audit export --policy ./policy.yaml --command check --format csv --out ./reports/policy-report.csv
+    ```
+
+    If no violations exist, a single compliant row is written so downstream parsers always receive a valid file.
+  </Accordion>
+  <Accordion title="SARIF">
+    Static Analysis Results Interchange Format (SARIF 2.1.0) for security scanning tooling. Compatible with GitHub code scanning, VS Code SARIF viewer, and other SARIF consumers.
+
+    ```bash
+    llm-checker audit export --policy ./policy.yaml --command check --format sarif --out ./reports/policy-report.sarif
+    ```
+
+    Violation severity maps to SARIF levels: `high` → `error`, `medium` → `warning`, `low` → `note`. Suppressed violations are emitted with level `note`.
+  </Accordion>
+</AccordionGroup>
+
+### SIEM integration examples
+
+```bash
+# CI artifact (JSON) for post-processing in pipeline jobs
+llm-checker audit export --policy ./policy.yaml --command check --format json --out ./reports/policy-report.json
+
+# Flat CSV for SIEM ingestion (Splunk/ELK/DataDog pipelines)
+llm-checker audit export --policy ./policy.yaml --command check --format csv --out ./reports/policy-report.csv
+
+# SARIF for security/code-scanning tooling integrations
+llm-checker audit export --policy ./policy.yaml --command check --format sarif --out ./reports/policy-report.sarif
+```
+
+---
+
+## GitHub Actions policy gate
+
+Copy this workflow to add an LLM policy gate to your pull request checks:
+
+```yaml
+name: Policy Gate
+on: [pull_request]
+
+jobs:
+  policy-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: node bin/enhanced_cli.js check --policy ./policy.yaml --runtime ollama --no-verbose
+      - if: always()
+        run: node bin/enhanced_cli.js audit export --policy ./policy.yaml --command check --format all --runtime ollama --no-verbose --out-dir ./policy-reports
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: policy-audit-reports
+          path: ./policy-reports
+```
+
+The `if: always()` conditions ensure audit reports are written and uploaded even when the policy gate fails, giving reviewers access to the full violation details.
+
+<Tip>
+  Start with `mode: audit` to observe what would be blocked before switching to `mode: enforce`. This lets you tune your allow lists and exceptions without interrupting existing workflows.
+</Tip>
+
+---
+
+## Provenance fields in reports
+
+`check`, `recommend`, and `audit export` outputs include normalized provenance fields for every model:
+
+| Field | Description |
+|---|---|
+| `source` | Origin of the model (`local`, `ollama`, `unknown`) |
+| `registry` | Registry the model was fetched from |
+| `version` | Model version or tag |
+| `license` | Canonicalized license identifier |
+| `digest` | Content digest for reproducibility |
+
+If a field is unavailable from model metadata, outputs use `"unknown"` instead of omitting the field, keeping downstream parsers deterministic.

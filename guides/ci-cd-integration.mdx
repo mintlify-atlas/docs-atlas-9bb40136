@@ -1,0 +1,201 @@
+---
+title: "CI/CD Integration"
+description: "Gate pipelines on policy compliance, export audit artifacts in JSON, CSV, and SARIF, and integrate with SIEM and security scanning tools."
+---
+
+LLM Checker can act as a policy gate in any CI/CD pipeline. The `check` command with `--policy` enforces governance rules; `audit export` writes machine-readable compliance artifacts that downstream jobs, SIEM systems, and security scanners can consume.
+
+<Warning>
+  In `enforce` mode, a blocking policy violation causes a **non-zero exit code**. If your CI system treats non-zero exits as failures (GitHub Actions, GitLab CI, Jenkins, etc.), ensure your policy is validated and correct before enabling `enforce` mode in a required pipeline stage. Use `audit` mode first to identify violations without breaking builds.
+</Warning>
+
+## GitHub Actions Policy Gate
+
+Copy this workflow directly into `.github/workflows/policy-gate.yml`. It runs the policy check on every pull request, exports all report formats, and uploads them as a build artifact.
+
+```yaml
+name: Policy Gate
+on: [pull_request]
+
+jobs:
+  policy-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: node bin/enhanced_cli.js check --policy ./policy.yaml --runtime ollama --no-verbose
+      - if: always()
+        run: node bin/enhanced_cli.js audit export --policy ./policy.yaml --command check --format all --runtime ollama --no-verbose --out-dir ./policy-reports
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: policy-audit-reports
+          path: ./policy-reports
+```
+
+<Note>
+  The `--no-verbose` flag suppresses progress output, keeping CI logs clean. The `if: always()` on the export and upload steps ensures audit artifacts are written even when the policy check step fails.
+</Note>
+
+<Steps>
+  <Step title="Add the policy file to your repository">
+    Generate a policy template and commit it alongside your code:
+
+    ```bash
+    llm-checker policy init
+    # edit policy.yaml, then:
+    git add policy.yaml
+    git commit -m "chore: add llm-checker policy"
+    ```
+  </Step>
+
+  <Step title="Choose enforcement mode">
+    Set `enforcement.mode` in `policy.yaml`:
+
+    - `audit` — logs violations, exits `0`. Use this while iterating on policy rules.
+    - `enforce` — exits non-zero on blocking violations. Use this once your policy is stable.
+
+    ```yaml
+    enforcement:
+      mode: enforce
+      exit_code: 1
+    ```
+  </Step>
+
+  <Step title="Add the workflow file">
+    Copy the GitHub Actions YAML above into `.github/workflows/policy-gate.yml` and push. The gate runs automatically on every pull request.
+  </Step>
+
+  <Step title="Review audit artifacts">
+    After each run, download the `policy-audit-reports` artifact from the Actions summary. It contains `json`, `csv`, and `sarif` reports for the policy evaluation.
+  </Step>
+</Steps>
+
+## Audit Export Formats
+
+Use `audit export` to produce compliance evidence in any of three formats. All formats are written before a non-zero exit in `enforce` mode.
+
+<CodeGroup>
+```bash JSON
+# CI artifact for post-processing in pipeline jobs
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format json \
+  --out ./reports/policy-report.json
+```
+
+```bash CSV
+# Flat CSV for SIEM ingestion (Splunk / ELK / DataDog pipelines)
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format csv \
+  --out ./reports/policy-report.csv
+```
+
+```bash SARIF
+# SARIF for security/code-scanning tool integrations
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format sarif \
+  --out ./reports/policy-report.sarif
+```
+</CodeGroup>
+
+### Export All Formats at Once
+
+```bash
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format all \
+  --out-dir ./reports
+```
+
+`--format all` honours `reporting.formats` in your policy file and falls back to `json,csv,sarif` if not configured.
+
+## SIEM Integration
+
+The CSV format is designed for direct ingestion into log management and observability platforms:
+
+<CodeGroup>
+```bash Splunk
+# Write CSV and ingest with Splunk Universal Forwarder
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format csv \
+  --out /var/log/llm-checker/policy-report.csv
+# Configure inputs.conf to monitor /var/log/llm-checker/
+```
+
+```bash ELK Stack
+# Write CSV and ship with Filebeat
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format csv \
+  --out ./reports/policy-report.csv
+# Point filebeat.yml inputs at ./reports/
+```
+
+```bash DataDog
+# Write CSV and pick up with DataDog Agent log collection
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format csv \
+  --out /var/log/llm-checker/policy-report.csv
+# Configure conf.d/llm_checker.d/conf.yaml log path
+```
+</CodeGroup>
+
+## SARIF for Security Scanning
+
+The SARIF format integrates with GitHub Advanced Security, GitLab SAST, and any tool that accepts the Static Analysis Results Interchange Format:
+
+```bash
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format sarif \
+  --out ./reports/policy-report.sarif
+```
+
+Upload SARIF directly to GitHub Code Scanning using the `github/codeql-action/upload-sarif` action:
+
+```yaml
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: ./reports/policy-report.sarif
+```
+
+## JSON for Pipeline Post-Processing
+
+The JSON format is suitable for any pipeline job that needs to parse, filter, or forward compliance data programmatically:
+
+```bash
+llm-checker audit export \
+  --policy ./policy.yaml \
+  --command check \
+  --format json \
+  --out ./reports/check-policy.json
+
+# Example: extract violation count with jq
+jq '.violations | length' ./reports/check-policy.json
+```
+
+## `--no-verbose` for Clean CI Output
+
+Pass `--no-verbose` to any `check`, `recommend`, or `audit export` invocation to suppress progress banners, spinners, and decorative output. This keeps CI logs readable and avoids noise in artifact uploads:
+
+```bash
+llm-checker check --policy ./policy.yaml --no-verbose
+llm-checker audit export --policy ./policy.yaml --command check --format all --no-verbose --out-dir ./reports
+```

@@ -1,0 +1,134 @@
+---
+title: "Calibration Guide"
+description: "Generate calibration artifacts from a prompt suite and apply hardware-calibrated routing to recommend and ai-run in 10 minutes."
+---
+
+Calibration produces two artifacts — a **calibration contract** (`calibration-result.json`) and a **routing policy** (`calibration-policy.yaml`) — that let `recommend` and `ai-run` route through measured results instead of purely deterministic scoring.
+
+<Steps>
+  <Step title="Copy the sample prompt suite">
+    The repository ships a ready-to-use JSONL prompt suite under `docs/fixtures/calibration/`. Copy it to your working directory:
+
+    ```bash
+    cp ./docs/fixtures/calibration/sample-suite.jsonl ./sample-suite.jsonl
+    ```
+
+    The file contains a set of representative prompts that the calibration engine will replay against each candidate model. You can replace it with your own JSONL suite at any time — each line must be a JSON object with at minimum a `prompt` field.
+  </Step>
+
+  <Step title="Generate calibration artifacts (dry-run)">
+    Run `calibrate` with `--dry-run` to produce both artifacts without executing real Ollama inference:
+
+    ```bash
+    mkdir -p ./artifacts
+    llm-checker calibrate \
+      --suite ./sample-suite.jsonl \
+      --models qwen2.5-coder:7b llama3.2:3b \
+      --runtime ollama \
+      --objective balanced \
+      --dry-run \
+      --output ./artifacts/calibration-result.json \
+      --policy-out ./artifacts/calibration-policy.yaml
+    ```
+
+    After this command completes, two artifacts are written:
+
+    | Artifact | Purpose |
+    |---|---|
+    | `./artifacts/calibration-result.json` | Calibration contract — raw scores, timing estimates, and model metadata per prompt |
+    | `./artifacts/calibration-policy.yaml` | Routing policy — consumed by `recommend` and `ai-run` via `--calibrated` |
+
+    <Note>
+      `--mode full` currently requires `--runtime ollama`. Remove `--dry-run` when you are ready to execute real inference and capture actual tok/s measurements.
+    </Note>
+
+    To inspect the expected policy structure before running calibration, see the reference fixture:
+
+    ```bash
+    cat ./docs/fixtures/calibration/sample-generated-policy.yaml
+    ```
+  </Step>
+
+  <Step title="Apply calibrated routing">
+    Pass the generated policy to `recommend` and `ai-run` via the `--calibrated` flag:
+
+    ```bash
+    llm-checker recommend --calibrated ./artifacts/calibration-policy.yaml --category coding
+    llm-checker ai-run --calibrated ./artifacts/calibration-policy.yaml --category coding --prompt "Refactor this function"
+    ```
+
+    The CLI prints routing provenance alongside the recommendation so you can confirm which resolution path was used.
+  </Step>
+</Steps>
+
+## Calibration Artifacts
+
+### `calibration-result.json`
+
+The calibration contract stores the raw output of the calibration run: per-model scores across each prompt in the suite, timing estimates, the objective used (`balanced`, `speed`, `quality`), and normalized model metadata. It is the source of truth for the routing policy that is derived from it.
+
+This file is useful for auditing what the calibration engine measured and for comparing runs across different prompt suites or model sets.
+
+### `calibration-policy.yaml`
+
+The routing policy is a structured YAML file consumed directly by `recommend` and `ai-run`. It maps categories and use-cases to the model that performed best under the specified objective. The policy format is compatible with the `--policy` flag schema and the `policy validate` command.
+
+Example structure (see `sample-generated-policy.yaml` for a full reference):
+
+```yaml
+version: 1
+routing:
+  coding:
+    model: qwen2.5-coder:7b
+    runtime: ollama
+    objective: balanced
+  general:
+    model: llama3.2:3b
+    runtime: ollama
+    objective: balanced
+```
+
+## `--calibrated` Flag Discovery Path
+
+When `--calibrated` is passed **without a file path**, `recommend` and `ai-run` search for a policy file at the following locations in order:
+
+```
+~/.llm-checker/calibration-policy.yaml
+~/.llm-checker/calibration-policy.yml
+~/.llm-checker/calibration-policy.json
+```
+
+The first file found is loaded automatically. This lets you set a machine-wide default calibration policy without specifying the path on every invocation:
+
+```bash
+# Install policy to default discovery path
+cp ./artifacts/calibration-policy.yaml ~/.llm-checker/calibration-policy.yaml
+
+# Now --calibrated resolves automatically
+llm-checker recommend --calibrated --category coding
+llm-checker ai-run --calibrated --category coding --prompt "Refactor this function"
+```
+
+## Resolution Precedence
+
+When multiple routing sources are active, the following precedence applies:
+
+| Priority | Source | How to activate |
+|:---:|---|---|
+| 1 (highest) | `--policy <file>` | Explicit enterprise policy file |
+| 2 | `--calibrated <file>` | Explicit calibration policy file |
+| 3 | `--calibrated` (no path) | Default discovery path |
+| 4 (lowest) | Deterministic fallback | No flag — hardware-scored ranking |
+
+`--policy` always wins. This means you can author a governance policy that overrides calibrated routing where needed, while calibrated routing overrides the default deterministic selector everywhere else.
+
+```bash
+# --policy takes precedence over --calibrated
+llm-checker ai-run --policy ./calibration-policy.yaml --prompt "Summarize this report"
+
+# --calibrated with explicit path
+llm-checker recommend --calibrated ./calibration-policy.yaml --category reasoning
+
+# --calibrated with auto-discovery
+llm-checker ai-run --calibrated --category coding --prompt "Refactor this function"
+```

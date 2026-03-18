@@ -1,0 +1,103 @@
+---
+title: "hw-detect — Hardware Analysis"
+description: "Detect CPU, GPU, RAM, acceleration backend, and memory tier for your system."
+---
+
+## Overview
+
+`hw-detect` inspects your machine and reports every hardware detail that affects local LLM inference: CPU capabilities, GPU topology (dedicated and integrated), unified or discrete memory, memory bandwidth, and the best available inference backend.
+
+```bash
+llm-checker hw-detect
+```
+
+## Example Output
+
+**Apple M4 Pro (24 GB Unified Memory):**
+
+```
+=== Hardware Detection ===
+
+Summary:
+  Apple M4 Pro (24GB Unified Memory)
+  Tier: MEDIUM HIGH
+  Max model size: 15GB
+  Best backend: metal
+  Dedicated GPUs: None
+  Integrated GPUs: None
+
+CPU:
+  Apple M4 Pro
+  Cores: 12 (12 physical)
+  SIMD: NEON
+  [OK] ARM NEON
+
+METAL:
+  Apple M4 Pro
+  GPU Cores: 16
+  Unified Memory: 24GB
+  Memory Bandwidth: 273GB/s
+
+Fingerprint: <hardware-fingerprint>
+```
+
+**Hybrid GPU system (dedicated + integrated):**
+
+```
+Summary:
+  Dedicated GPUs: NVIDIA GeForce RTX 4060
+  Integrated GPUs: Intel Iris Xe Graphics
+  Assist path: Integrated/shared-memory GPU detected, runtime remains CPU
+```
+
+On hybrid or integrated-only systems, `hw-detect` surfaces the full GPU inventory. Integrated GPUs are visible even when the selected runtime backend resolves to CPU.
+
+## Flags
+
+<ParamField path="-j, --json" type="flag">
+  Output the full hardware detection result as a machine-readable JSON object. Useful for scripting or CI pipelines.
+</ParamField>
+
+## What It Detects
+
+| Field | Description |
+|-------|-------------|
+| **CPU** | Brand, core count (logical and physical), clock speed, SIMD capabilities (AVX-512, AVX2, ARM NEON) |
+| **GPU** | Model name, VRAM, GPU type (dedicated vs. integrated), backend availability |
+| **Memory** | Total system RAM or unified memory (Apple Silicon) |
+| **Backend** | Best available inference backend: `metal`, `cuda`, `rocm`, `cpu` |
+| **Tier** | Hardware tier label: `ULTRA LOW`, `LOW`, `MEDIUM`, `HIGH`, `VERY HIGH`, `EXTREME` |
+| **Max model size** | Estimated maximum model size (GB) that fits in available memory |
+
+## GPU Topology
+
+`hw-detect` enumerates GPUs into two separate lists:
+
+- **Dedicated GPUs** — discrete NVIDIA, AMD, or Intel Arc GPUs with their own VRAM
+- **Integrated GPUs** — Intel Iris Xe, AMD integrated Radeon, Apple Vega, etc.
+
+On Intel hybrid laptops or mini PCs with both a dedicated GPU and integrated graphics, both appear in the inventory simultaneously. The `Assist path` message explains when an integrated GPU is visible but the runtime backend still falls through to CPU.
+
+<Note>
+The hardware fingerprint shown at the bottom of the output is a deterministic string that uniquely identifies your hardware configuration. It is used internally for cache keying.
+</Note>
+
+## Supported Backends
+
+| Backend | Hardware |
+|---------|----------|
+| `metal` | Apple Silicon (M1/M2/M3/M4 series) |
+| `cuda` | NVIDIA GPUs with CUDA support |
+| `rocm` | AMD GPUs with ROCm support |
+| `generic` | Intel Arc and other discrete GPUs |
+| `cpu` | CPU-only inference (fallback) |
+
+## Usage in Workflows
+
+```bash
+# Detect hardware and save as JSON
+llm-checker hw-detect --json > hardware.json
+
+# Quick human-readable check before running models
+llm-checker hw-detect
+```

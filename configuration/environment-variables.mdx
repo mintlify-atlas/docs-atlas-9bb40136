@@ -1,0 +1,147 @@
+---
+title: "Environment Variables"
+description: "Override hardware detection, Ollama connectivity, logging, and output behavior without editing any configuration file."
+---
+
+Environment variables let you adjust LLM Checker behavior for the current shell session or a single command. They are useful for CI/CD pipelines, Docker containers, and one-off overrides without touching `~/.llm-checker.json`.
+
+## Quick reference
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `LLM_CHECKER_NO_GPU` | boolean | `false` | Disable GPU detection entirely |
+| `LLM_CHECKER_VRAM_GB` | number | auto-detected | Override detected VRAM in GB |
+| `OLLAMA_BASE_URL` | string | `http://localhost:11434` | Ollama API base URL |
+| `LLM_CHECKER_LOG_LEVEL` | string | `info` | Log verbosity level |
+| `LLM_CHECKER_CACHE_DIR` | string | `~/.llm-checker` | Directory for cache and benchmark data |
+| `NO_COLOR` | any | unset | Disable all ANSI color output |
+
+---
+
+## Variable reference
+
+<ParamField path="LLM_CHECKER_NO_GPU" type="boolean" default="false">
+  When set to `true` (or any truthy string), LLM Checker skips GPU enumeration and treats the system as CPU-only. Hardware scoring, VRAM budgets, and backend selection all fall back to CPU paths.
+
+  Use this in unit tests and headless CI runners where GPU drivers are not installed.
+
+  ```bash
+  export LLM_CHECKER_NO_GPU=true
+  ```
+</ParamField>
+
+<ParamField path="LLM_CHECKER_VRAM_GB" type="number">
+  Forces LLM Checker to use the specified VRAM amount (in GB) instead of the auto-detected value. Useful when the system GPU driver reports incorrect memory, or when you want to simulate a different GPU tier.
+
+  ```bash
+  export LLM_CHECKER_VRAM_GB=8
+  ```
+
+  <Note>
+    Setting `LLM_CHECKER_NO_GPU=true` takes precedence — VRAM is ignored when GPU detection is disabled.
+  </Note>
+</ParamField>
+
+<ParamField path="OLLAMA_BASE_URL" type="string" default="http://localhost:11434">
+  Base URL for the Ollama HTTP API. Override this to point at a remote Ollama daemon, a different port, or an SSH tunnel.
+
+  ```bash
+  export OLLAMA_BASE_URL=http://remote-server:11434
+  ```
+
+  This affects all commands that query Ollama: `check`, `recommend`, `ollama-plan`, `installed`, and MCP tools.
+</ParamField>
+
+<ParamField path="LLM_CHECKER_LOG_LEVEL" type="string" default="info">
+  Controls internal log verbosity. Accepted values in ascending order of detail:
+
+  - `error` — only fatal errors
+  - `warn` — warnings and errors
+  - `info` — standard operational messages (default)
+  - `debug` — verbose trace output including hardware detection steps, scoring internals, and policy evaluation details
+
+  ```bash
+  export LLM_CHECKER_LOG_LEVEL=debug
+  ```
+</ParamField>
+
+<ParamField path="LLM_CHECKER_CACHE_DIR" type="string" default="~/.llm-checker">
+  Directory where LLM Checker stores the scraped Ollama model cache, benchmark results, and calibration artifacts. Override this if you want a shared cache across users, a tmpfs location, or a project-local directory.
+
+  ```bash
+  export LLM_CHECKER_CACHE_DIR=/custom/cache/path
+  ```
+</ParamField>
+
+<ParamField path="NO_COLOR" type="any">
+  When set to any non-empty value, LLM Checker disables all ANSI escape codes and renders plain monochrome text. This is the standard `NO_COLOR` convention respected by most CLI tools.
+
+  ```bash
+  export NO_COLOR=1
+  ```
+
+  <Tip>
+    Set `NO_COLOR=1` in CI pipelines where color codes break log parsers or produce garbled artifacts.
+  </Tip>
+</ParamField>
+
+---
+
+## CI/CD usage
+
+### GitHub Actions
+
+```yaml
+jobs:
+  llm-check:
+    runs-on: ubuntu-latest
+    env:
+      LLM_CHECKER_NO_GPU: "true"
+      NO_COLOR: "1"
+      LLM_CHECKER_LOG_LEVEL: "warn"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install -g llm-checker
+      - run: llm-checker check --format json --quiet > hardware-analysis.json
+```
+
+### Shell script with inline overrides
+
+You can scope overrides to a single command without exporting to the shell session:
+
+```bash
+# Override VRAM for this command only
+LLM_CHECKER_VRAM_GB=16 llm-checker check --quiet
+
+# Simulate CPU-only on a GPU machine
+LLM_CHECKER_NO_GPU=true llm-checker check --use-case coding
+
+# Point at a remote Ollama instance
+OLLAMA_BASE_URL=http://192.168.1.100:11434 llm-checker recommend --category coding
+```
+
+### Full debug session
+
+Capture all diagnostic output to a file for support or troubleshooting:
+
+```bash
+export LLM_CHECKER_LOG_LEVEL=debug
+export DEBUG=1
+llm-checker check --detailed 2>&1 | tee debug.log
+```
+
+### RAM sensitivity test in CI
+
+```bash
+for ram in 8 16 32 64; do
+  echo "=== ${ram} GB RAM ==="
+  LLM_CHECKER_RAM_GB=$ram llm-checker check --quiet | grep "Compatible:"
+done
+```
+
+<Warning>
+  `LLM_CHECKER_NO_GPU` and `LLM_CHECKER_VRAM_GB` override real hardware. Avoid committing these as permanent CI environment variables — use them only for specific test scenarios where you need deterministic hardware simulation.
+</Warning>
