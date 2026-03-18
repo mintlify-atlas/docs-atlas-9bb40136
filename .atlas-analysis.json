@@ -1,0 +1,100 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "LLM Checker",
+  "projectDescription": "An intelligent CLI tool that analyzes your hardware and recommends the optimal local LLM models to run, with full Ollama integration, 4D scoring, and enterprise policy support.",
+  "theme": "aspen",
+  "primaryColor": "#cb0404",
+  "lightColor": "#f3d2d2",
+  "darkColor": "#e37b84",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Command Reference",
+            "pages": [
+              "commands/hw-detect",
+              "commands/check",
+              "commands/recommend",
+              "commands/search",
+              "commands/installed",
+              "commands/ai-commands",
+              "commands/ollama-plan",
+              "commands/calibrate",
+              "commands/advanced-commands"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/config-file",
+              "configuration/environment-variables",
+              "configuration/policy"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/calibration",
+              "guides/enterprise-policy",
+              "guides/ci-cd-integration",
+              "guides/mcp-integration"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/scoring-system",
+              "reference/hardware-support",
+              "reference/model-catalog",
+              "reference/architecture",
+              "reference/changelog"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Hardware-aware model recommendations across 200+ dynamic Ollama models",
+    "4D scoring engine (Quality, Speed, Fit, Context) weighted by use case",
+    "Multi-GPU hardware detection: Apple Silicon, NVIDIA CUDA, AMD ROCm, Intel Arc",
+    "Full Ollama integration: pull, run, list, remove, benchmark, compare",
+    "Model Context Protocol (MCP) server for Claude Code integration",
+    "Enterprise policy governance with audit export (JSON, CSV, SARIF)",
+    "Calibrated routing via JSONL prompt suites and YAML policy artifacts",
+    "Interactive CLI panel with animated banner and command navigation",
+    "Zero native dependencies — pure JavaScript on Node.js 16+"
+  ],
+  "publicApiSurface": [
+    "llm-checker hw-detect",
+    "llm-checker check [--policy <file>] [--use-case <type>] [--runtime <runtime>]",
+    "llm-checker recommend [--category <cat>] [--calibrated [file]] [--policy <file>]",
+    "llm-checker search <query> [--use-case <type>] [--max-size <gb>] [--quant <type>]",
+    "llm-checker installed",
+    "llm-checker calibrate --suite <file> --models ... [--dry-run] [--policy-out <file>]",
+    "llm-checker ollama-plan",
+    "llm-checker ai-check",
+    "llm-checker ai-run [--calibrated] [--category <cat>] [--prompt <text>]",
+    "llm-checker sync",
+    "llm-checker smart-recommend [--use-case <type>]",
+    "llm-checker policy init",
+    "llm-checker policy validate <file>",
+    "llm-checker audit export --policy <file> --command <cmd> --format <fmt>",
+    "llm-checker gpu-plan",
+    "llm-checker verify-context",
+    "llm-checker amd-guard",
+    "llm-checker toolcheck",
+    "llm-checker mcp-setup",
+    "llm-checker-mcp (MCP server binary)"
+  ]
+}
